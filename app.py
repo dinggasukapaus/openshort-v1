@@ -2674,8 +2674,8 @@ async def get_source_video(job_id: str, request: Request,
 
 
 @app.get("/api/jobs/{job_id}/download-all")
-async def download_all_clips(job_id: str, request: Request):
-    """Bundle the current version of every clip of a job into one ZIP."""
+async def download_all_clips(job_id: str, request: Request, clips: Optional[str] = None):
+    """Bundle the current version of every clip (or selected clips) of a job into one ZIP."""
     await _ensure_job_files(job_id, request)
     if job_id in jobs:
         await _assert_job_owner(request, jobs[job_id])
@@ -2707,8 +2707,19 @@ async def download_all_clips(job_id: str, request: Request):
         if filename and os.path.exists(path):
             files.append((i, path))
 
+    # Filter by specific clip indices if requested (e.g. clips=0,2,3)
+    requested_indices = None
+    if clips:
+        try:
+            requested_indices = set(int(x.strip()) for x in clips.split(',') if x.strip().isdigit())
+        except Exception:
+            pass
+
+    if requested_indices is not None:
+        files = [(i, path) for i, path in files if i in requested_indices]
+
     if not files:
-        raise HTTPException(status_code=404, detail="No clip files found for this job")
+        raise HTTPException(status_code=404, detail="No matching clip files found for this job")
 
     zip_path = os.path.join(output_dir, f"clips_{int(time.time())}.zip")
 
@@ -2780,10 +2791,12 @@ async def download_all_clips(job_id: str, request: Request):
     loop = asyncio.get_event_loop()
     await loop.run_in_executor(None, build_zip)
 
+    zip_filename = f"openshorts_clips_selected_{job_id[:8]}.zip" if requested_indices is not None else f"openshorts_clips_{job_id[:8]}.zip"
+
     return FileResponse(
         zip_path,
         media_type="application/zip",
-        filename=f"openshorts_clips_{job_id[:8]}.zip",
+        filename=zip_filename,
         background=BackgroundTask(os.remove, zip_path),
     )
 

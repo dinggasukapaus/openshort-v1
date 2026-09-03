@@ -13,6 +13,7 @@ export default function KeyboardShortcutsModal({ isOpen, onClose }) {
         { key: 'J atau ←', desc: 'Mundur 3 detik', icon: <Rewind size={13} /> },
         { key: 'L atau →', desc: 'Maju 3 detik', icon: <FastForward size={13} /> },
         { key: '0', desc: 'Restart video ke awal', icon: null },
+        { key: '[ dan ]', desc: 'Perlambat / Percepat pemutaran (1x - 2x)', icon: <FastForward size={13} /> },
       ],
     },
     {

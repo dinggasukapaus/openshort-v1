@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Download, Share2, Instagram, Youtube, Video, AlertCircle, Loader2, Copy, Check, Wand2, Type, Calendar, Languages, FileText, Link2, Scissors, Crosshair, TrendingUp, Shield, Star, Sparkles } from 'lucide-react';
+import { Download, Share2, Instagram, Youtube, Video, AlertCircle, Loader2, Copy, Check, Wand2, Type, Calendar, Languages, FileText, Link2, Scissors, Crosshair, TrendingUp, Shield, Star, Sparkles, FastForward } from 'lucide-react';
 import { getApiUrl } from '../config';
 import { apiFetch } from '../lib/api';
 import SubtitleModal from './SubtitleModal';
@@ -128,6 +128,24 @@ export default function ResultCard({ clip, index, jobId, durable, uploadPostKey,
         } catch {}
         if (onStatusChange) onStatusChange(index, clipStatus, next);
     };
+
+    const [playbackSpeed, setPlaybackSpeed] = useState(1);
+
+    const cyclePlaybackSpeed = (e) => {
+        e.stopPropagation();
+        const speeds = [1, 1.25, 1.5, 2];
+        const next = speeds[(speeds.indexOf(playbackSpeed) + 1) % speeds.length];
+        setPlaybackSpeed(next);
+        if (videoRef.current) {
+            videoRef.current.playbackRate = next;
+        }
+    };
+
+    useEffect(() => {
+        if (videoRef.current) {
+            videoRef.current.playbackRate = playbackSpeed;
+        }
+    }, [playbackSpeed, currentVideoUrl]);
 
     const cycleSafeZone = (e) => {
         e.stopPropagation();
@@ -890,8 +908,21 @@ export default function ResultCard({ clip, index, jobId, durable, uploadPostKey,
                     </button>
                 </div>
 
-                {/* Top Right Video Overlay Tools: Safe Zone & Star */}
+                {/* Top Right Video Overlay Tools: Speed, Safe Zone & Star */}
                 <div className="absolute top-3 right-3 flex items-center gap-1.5 z-30">
+                    <button
+                        onClick={cyclePlaybackSpeed}
+                        title={`Kecepatan Putar: ${playbackSpeed}x (Klik untuk ganti 1x / 1.25x / 1.5x / 2x)`}
+                        className={`px-2 py-1 rounded-full text-[10px] font-mono flex items-center gap-0.5 transition-all backdrop-blur-sm border shadow-sm cursor-pointer ${
+                            playbackSpeed > 1
+                                ? 'bg-paper text-brass border-brass font-bold'
+                                : 'bg-black/60 text-white/70 border-white/20 hover:text-white hover:bg-black/80'
+                        }`}
+                    >
+                        <FastForward size={10} className={playbackSpeed > 1 ? "text-brass" : "text-white/60"} />
+                        <span>{playbackSpeed}x</span>
+                    </button>
+
                     <button
                         onClick={cycleSafeZone}
                         title={`Safe Zone: ${safeZoneMode.toUpperCase()} (Click to switch TikTok / Reels / Shorts / Off)`}

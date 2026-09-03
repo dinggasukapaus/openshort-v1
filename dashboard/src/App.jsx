@@ -277,6 +277,22 @@ function App() {
           e.preventDefault();
           playingVideo.currentTime = 0;
         }
+      } else if (e.key === '[' || e.key === '<') {
+        if (playingVideo) {
+          e.preventDefault();
+          const speeds = [1, 1.25, 1.5, 2];
+          const curr = playingVideo.playbackRate || 1;
+          const prev = speeds.slice().reverse().find(s => s < curr) || 1;
+          playingVideo.playbackRate = prev;
+        }
+      } else if (e.key === ']' || e.key === '>') {
+        if (playingVideo) {
+          e.preventDefault();
+          const speeds = [1, 1.25, 1.5, 2];
+          const curr = playingVideo.playbackRate || 1;
+          const next = speeds.find(s => s > curr) || 2;
+          playingVideo.playbackRate = next;
+        }
       }
     };
 
@@ -616,17 +632,26 @@ function App() {
     } catch { /* keep current results */ }
   };
 
-  const handleDownloadAll = async () => {
+  const handleDownloadAll = async (filteredOnly = false) => {
     if (!jobId) return;
     setDownloadingAll(true);
     try {
-      const res = await apiFetch(`/api/jobs/${jobId}/download-all`);
+      let endpoint = `/api/jobs/${jobId}/download-all`;
+      let defaultFileName = `openshorts_clips_${(jobId || '').slice(0, 8)}.zip`;
+
+      if (filteredOnly && clipFilter !== 'all' && displayClips.length > 0) {
+        const clipIndices = displayClips.map(c => c.index).join(',');
+        endpoint += `?clips=${clipIndices}`;
+        defaultFileName = `openshorts_${clipFilter}_clips_${(jobId || '').slice(0, 8)}.zip`;
+      }
+
+      const res = await apiFetch(endpoint);
       if (!res.ok) throw new Error(await res.text());
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `openshorts_clips_${(jobId || '').slice(0, 8)}.zip`;
+      a.download = defaultFileName;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -2020,15 +2045,27 @@ function App() {
                         <span className="hidden sm:inline">shortcuts</span>
                         <kbd className="hidden md:inline px-1.5 py-0.2 bg-paper3 border border-rule text-[10px] rounded font-mono">?</kbd>
                       </button>
+                      {clipFilter !== 'all' && displayClips.length > 0 && (
+                        <button
+                          onClick={() => handleDownloadAll(true)}
+                          disabled={downloadingAll}
+                          className="btn-primary px-3 py-2 text-xs flex items-center gap-1.5 font-medium"
+                          title={`Download only ${displayClips.length} filtered clips as a ZIP`}
+                        >
+                          {downloadingAll
+                            ? <><Loader2 size={14} className="animate-spin" />zipping…</>
+                            : <><Download size={14} />download filtered ({displayClips.length})</>}
+                        </button>
+                      )}
                       <button
-                        onClick={handleDownloadAll}
+                        onClick={() => handleDownloadAll(false)}
                         disabled={downloadingAll}
                         className="btn-ghost px-3 py-2 text-xs"
                         title="Download all clips as a ZIP"
                       >
-                        {downloadingAll
+                        {downloadingAll && clipFilter === 'all'
                           ? <><Loader2 size={14} className="animate-spin" />zipping…</>
-                          : <><Download size={14} />download all</>}
+                          : <><Download size={14} />download all ({results.clips.length})</>}
                       </button>
                       {results.clips.length > 1 && (
                         <button
