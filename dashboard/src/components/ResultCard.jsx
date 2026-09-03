@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Download, Share2, Instagram, Youtube, Video, AlertCircle, Loader2, Copy, Check, Wand2, Type, Calendar, Languages, FileText, Link2, Scissors, Crosshair, TrendingUp, Shield, Star, Sparkles, FastForward, Camera } from 'lucide-react';
+import { Download, Share2, Instagram, Youtube, Video, AlertCircle, Loader2, Copy, Check, Wand2, Type, Calendar, Languages, FileText, Link2, Scissors, Crosshair, TrendingUp, Shield, Star, Sparkles, FastForward, Camera, Pencil, X } from 'lucide-react';
 import { getApiUrl } from '../config';
 import { apiFetch } from '../lib/api';
 import SubtitleModal from './SubtitleModal';
@@ -108,6 +108,54 @@ export default function ResultCard({ clip, index, jobId, durable, uploadPostKey,
     });
     const [copiedAll, setCopiedAll] = useState(false);
 
+    const [customTitle, setCustomTitle] = useState(() => {
+        try {
+            return localStorage.getItem(`openshorts_clip_${jobId}_${index}_title`) || clip.video_title_for_youtube_short || "Viral Short Video";
+        } catch {
+            return clip.video_title_for_youtube_short || "Viral Short Video";
+        }
+    });
+    const [isEditingTitle, setIsEditingTitle] = useState(false);
+    const [tempTitle, setTempTitle] = useState(customTitle);
+
+    const [customHook, setCustomHook] = useState(() => {
+        try {
+            return localStorage.getItem(`openshorts_clip_${jobId}_${index}_hook`) || clip.viral_hook_text || (clip.auto_hook?.text) || "";
+        } catch {
+            return clip.viral_hook_text || (clip.auto_hook?.text) || "";
+        }
+    });
+    const [isEditingHook, setIsEditingHook] = useState(false);
+    const [tempHook, setTempHook] = useState(customHook);
+
+    const saveTitle = (e) => {
+        if (e) e.preventDefault();
+        setCustomTitle(tempTitle);
+        setIsEditingTitle(false);
+        try {
+            localStorage.setItem(`openshorts_clip_${jobId}_${index}_title`, tempTitle);
+        } catch {}
+    };
+
+    const cancelTitle = () => {
+        setTempTitle(customTitle);
+        setIsEditingTitle(false);
+    };
+
+    const saveHook = (e) => {
+        if (e) e.preventDefault();
+        setCustomHook(tempHook);
+        setIsEditingHook(false);
+        try {
+            localStorage.setItem(`openshorts_clip_${jobId}_${index}_hook`, tempHook);
+        } catch {}
+    };
+
+    const cancelHook = () => {
+        setTempHook(customHook);
+        setIsEditingHook(false);
+    };
+
     const cycleStatus = (e) => {
         e.stopPropagation();
         const order = ['draft', 'review', 'approved', 'posted'];
@@ -155,8 +203,8 @@ export default function ResultCard({ clip, index, jobId, durable, uploadPostKey,
     };
 
     const copyAllMeta = () => {
-        const title = clip.video_title_for_youtube_short || "Viral Short Video";
-        const hook = clip.viral_hook_text || (clip.auto_hook?.text) || "";
+        const title = customTitle || clip.video_title_for_youtube_short || "Viral Short Video";
+        const hook = customHook || clip.viral_hook_text || (clip.auto_hook?.text) || "";
         const caption = clip.video_description_for_tiktok || clip.video_description_for_instagram || "";
         const nicheObj = NICHE_PRESETS.find(n => n.id === selectedNiche) || NICHE_PRESETS[0];
         const tags = nicheObj.tags;
@@ -1005,32 +1053,125 @@ export default function ResultCard({ clip, index, jobId, durable, uploadPostKey,
 
             {/* Right: Content & Details */}
             <div className="flex-1 p-4 md:p-5 flex flex-col overflow-hidden min-w-0">
-                <div className="mb-4">
-                    <h3 className="text-base font-medium text-ink leading-tight line-clamp-2 mb-2 break-words" title={clip.video_title_for_youtube_short}>
-                        {clip.video_title_for_youtube_short || "Viral Clip Generated"}
-                    </h3>
-                    <div className="flex flex-wrap gap-1.5">
+                <div className="mb-3">
+                    {/* Inline Editable Title Header */}
+                    {isEditingTitle ? (
+                        <form onSubmit={saveTitle} className="mb-2 space-y-1.5">
+                            <div className="flex items-center gap-1.5">
+                                <input
+                                    type="text"
+                                    value={tempTitle}
+                                    onChange={(e) => setTempTitle(e.target.value)}
+                                    className="bg-paper border border-brass rounded px-2.5 py-1 text-sm text-ink w-full focus:outline-none focus:ring-1 focus:ring-brass"
+                                    placeholder="Tulis judul Shorts yang menarik..."
+                                    autoFocus
+                                />
+                                <button
+                                    type="submit"
+                                    className="p-1.5 rounded bg-paper3 border border-brass text-brass hover:bg-brass hover:text-black transition-colors shrink-0 cursor-pointer"
+                                    title="Simpan Judul"
+                                >
+                                    <Check size={14} />
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={cancelTitle}
+                                    className="p-1.5 rounded bg-paper3 border border-rule text-muted hover:text-ink transition-colors shrink-0 cursor-pointer"
+                                    title="Batal"
+                                >
+                                    <X size={14} />
+                                </button>
+                            </div>
+                        </form>
+                    ) : (
+                        <div className="flex items-start justify-between gap-2 group mb-1.5">
+                            <h3
+                                onClick={() => { setTempTitle(customTitle); setIsEditingTitle(true); }}
+                                className="text-base font-medium text-ink leading-tight line-clamp-2 break-words cursor-pointer hover:text-brass transition-colors flex-1"
+                                title="Klik untuk mengedit judul ini"
+                            >
+                                {customTitle || "Viral Clip Generated"}
+                            </h3>
+                            <button
+                                onClick={() => { setTempTitle(customTitle); setIsEditingTitle(true); }}
+                                className="opacity-60 group-hover:opacity-100 p-1 text-muted hover:text-brass transition-opacity shrink-0 cursor-pointer"
+                                title="Edit Judul Ini"
+                            >
+                                <Pencil size={13} />
+                            </button>
+                        </div>
+                    )}
+
+                    {/* Character & Length Counter for Mobile Feed */}
+                    <div className="flex flex-wrap items-center gap-1.5 text-[11px] font-mono">
+                        <span className={`px-2 py-0.5 rounded-full border ${
+                            customTitle.length <= 60
+                                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 font-medium'
+                                : customTitle.length <= 100
+                                ? 'bg-amber-500/10 text-amber-400 border-amber-500/30'
+                                : 'bg-red-500/10 text-red-400 border-red-500/30 font-bold'
+                        }`}>
+                            {customTitle.length}/100 char {customTitle.length <= 60 ? '✓ Pas di Feed HP' : customTitle.length <= 100 ? '⚠️ Terpotong di Feed HP' : '❌ Melebihi Batas YT'}
+                        </span>
                         {durationReadout && <span className="readout bg-paper3 px-2 py-0.5 rounded-full shrink-0">{durationReadout}</span>}
                         {resolution && <span className="readout bg-paper3 px-2 py-0.5 rounded-full shrink-0">{resolution}</span>}
-                        <span className="readout bg-paper3 px-2 py-0.5 rounded-full shrink-0">#shorts</span>
-                        <span className="readout bg-paper3 px-2 py-0.5 rounded-full shrink-0">#viral</span>
                     </div>
                 </div>
 
                 {/* Descriptions (compact) — full text lives in the modal */}
                 <div className="flex-1 min-h-0 space-y-2 mb-4">
-                    <div className="bg-paper rounded-input px-3 py-2 border border-rule flex items-center gap-2 min-w-0">
-                        <span className="eyebrow shrink-0">YOUTUBE</span>
-                        <p className="text-xs text-ink2 truncate flex-1 min-w-0">
-                            {clip.video_title_for_youtube_short || "Viral Short Video"}
-                        </p>
-                        <button
-                            onClick={() => handleCopy('youtube', clip.video_title_for_youtube_short || "Viral Short Video")}
-                            aria-label="copy youtube title"
-                            className="p-1 rounded-full text-muted hover:text-brass transition-colors shrink-0"
-                        >
-                            {copied === 'youtube' ? <Check size={14} className="text-ok" /> : <Copy size={14} />}
-                        </button>
+                    {/* Viral Hook Box (Editable) */}
+                    <div className="bg-paper rounded-input px-3 py-2 border border-rule min-w-0 space-y-1">
+                        <div className="flex items-center justify-between gap-1">
+                            <span className="eyebrow shrink-0 text-brass flex items-center gap-1">
+                                <Sparkles size={11} /> HOOK VIRAL
+                            </span>
+                            {!isEditingHook && (
+                                <div className="flex items-center gap-1">
+                                    <button
+                                        onClick={() => { setTempHook(customHook); setIsEditingHook(true); }}
+                                        className="p-1 rounded text-muted hover:text-brass transition-colors"
+                                        title="Edit Hook Viral"
+                                    >
+                                        <Pencil size={12} />
+                                    </button>
+                                    <button
+                                        onClick={() => handleCopy('hook', customHook)}
+                                        aria-label="copy viral hook"
+                                        className="p-1 rounded text-muted hover:text-brass transition-colors"
+                                        title="Copy Hook"
+                                    >
+                                        {copied === 'hook' ? <Check size={13} className="text-ok" /> : <Copy size={13} />}
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                        {isEditingHook ? (
+                            <form onSubmit={saveHook} className="flex items-center gap-1.5 pt-1">
+                                <input
+                                    type="text"
+                                    value={tempHook}
+                                    onChange={(e) => setTempHook(e.target.value)}
+                                    className="bg-paper border border-brass rounded px-2 py-1 text-xs text-ink w-full focus:outline-none"
+                                    placeholder="Tulis kalimat hook pembuka..."
+                                    autoFocus
+                                />
+                                <button type="submit" className="p-1 text-brass hover:text-ok" title="Simpan">
+                                    <Check size={14} />
+                                </button>
+                                <button type="button" onClick={cancelHook} className="p-1 text-muted hover:text-ink" title="Batal">
+                                    <X size={14} />
+                                </button>
+                            </form>
+                        ) : (
+                            <p
+                                onClick={() => { setTempHook(customHook); setIsEditingHook(true); }}
+                                className="text-xs text-ink2 truncate cursor-pointer hover:text-ink transition-colors"
+                                title="Klik untuk mengedit hook ini"
+                            >
+                                {customHook || "(Belum ada hook - klik untuk menambahkan)"}
+                            </p>
+                        )}
                     </div>
 
                     <div className="bg-paper rounded-input px-3 py-2 border border-rule flex items-center gap-2 min-w-0">
