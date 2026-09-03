@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Upload, Sparkles, Youtube, Instagram, Share2, ChevronDown, Check, Activity, LayoutDashboard, Settings, Plus, History, X, Terminal, Shield, LayoutGrid, Image, Globe, RotateCcw, Calendar, AlertTriangle, KeyRound, Bot, Users, Smartphone, ExternalLink, Copy, CheckCircle2, Mail, Loader2, Download, Menu, Lock } from 'lucide-react';
+import { Upload, Sparkles, Youtube, Instagram, Share2, ChevronDown, Check, Activity, LayoutDashboard, Settings, Plus, History, X, Terminal, Shield, LayoutGrid, Image, Globe, RotateCcw, Calendar, AlertTriangle, KeyRound, Bot, Users, Smartphone, ExternalLink, Copy, CheckCircle2, Mail, Loader2, Download, Menu, Lock, PanelLeftClose, PanelLeft } from 'lucide-react';
 import KeyInput from './components/KeyInput';
 import MediaInput from './components/MediaInput';
 import McpConnectCard from './components/McpConnectCard';
@@ -207,8 +207,24 @@ function App() {
   const [showTrialUpgrade, setShowTrialUpgrade] = useState(false);
   const [topUpInfo, setTopUpInfo] = useState({});
   // Durable R2 URLs (per clip index) for the current job — used as a fallback when
-  // the ephemeral local /videos/ files have been cleaned up (e.g. after a reload).
   const [durableClips, setDurableClips] = useState({});
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem('openshorts_sidebar_collapsed') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const toggleSidebar = () => {
+    setSidebarCollapsed(prev => {
+      const next = !prev;
+      try {
+        localStorage.setItem('openshorts_sidebar_collapsed', String(next));
+      } catch {}
+      return next;
+    });
+  };
 
   const [apiKey, setApiKey] = useState(localStorage.getItem('gemini_key') || '');
   // Social API State - Load encrypted or plain
@@ -987,51 +1003,66 @@ function App() {
     <>
       <a
         href="#landing"
-        className="flex items-center gap-2 px-3 py-2 text-xs lowercase text-muted hover:text-ink2 transition-colors"
+        className={`flex items-center gap-2 px-3 py-2 text-xs lowercase text-muted hover:text-ink2 transition-colors ${collapsed ? 'justify-center px-1' : ''}`}
+        title="landing page"
       >
         <Globe size={14} className="shrink-0" />
-        <span className={collapsed ? 'hidden lg:block truncate' : 'truncate'}>landing page</span>
+        <span className={collapsed ? 'hidden' : 'hidden lg:block truncate'}>landing page</span>
       </a>
       <a
         href="https://github.com/mutonby/openshorts"
         target="_blank"
         rel="noopener noreferrer"
-        className="flex items-center gap-2 px-3 py-2 text-xs lowercase text-muted hover:text-ink2 transition-colors"
+        className={`flex items-center gap-2 px-3 py-2 text-xs lowercase text-muted hover:text-ink2 transition-colors ${collapsed ? 'justify-center px-1' : ''}`}
+        title="open source"
       >
         <svg height="14" viewBox="0 0 16 16" version="1.1" width="14" aria-hidden="true" fill="currentColor" className="shrink-0"><path fillRule="evenodd" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"></path></svg>
-        <span className={collapsed ? 'hidden lg:block truncate' : 'truncate'}>open source</span>
+        <span className={collapsed ? 'hidden' : 'hidden lg:block truncate'}>open source</span>
       </a>
       {billingEnabled && (
         <a
           href="#/pricing"
-          className="flex items-center gap-2 px-3 py-2 text-xs lowercase text-muted hover:text-ink2 transition-colors"
+          className={`flex items-center gap-2 px-3 py-2 text-xs lowercase text-muted hover:text-ink2 transition-colors ${collapsed ? 'justify-center px-1' : ''}`}
+          title="plans & pricing"
         >
           <Sparkles size={14} className="shrink-0" />
-          <span className={collapsed ? 'hidden lg:block truncate' : 'truncate'}>plans &amp; pricing</span>
+          <span className={collapsed ? 'hidden' : 'hidden lg:block truncate'}>plans &amp; pricing</span>
         </a>
       )}
       <a
         href="mailto:info@openshorts.app"
-        className="flex items-center gap-2 px-3 py-2 text-xs lowercase text-muted hover:text-ink2 transition-colors"
+        className={`flex items-center gap-2 px-3 py-2 text-xs lowercase text-muted hover:text-ink2 transition-colors ${collapsed ? 'justify-center px-1' : ''}`}
+        title="info@openshorts.app"
       >
         <Mail size={14} className="shrink-0" />
-        <span className={collapsed ? 'hidden lg:block truncate' : 'truncate'}>info@openshorts.app</span>
+        <span className={collapsed ? 'hidden' : 'hidden lg:block truncate'}>info@openshorts.app</span>
       </a>
     </>
   );
 
-  // Desktop rail: icon-only from md, labelled from lg. Below md it is gone
-  // entirely — an unlabelled 80px rail ate a fifth of a phone screen.
+  // Desktop rail: icon-only from md (or when collapsed), labelled from lg (when expanded).
   const Sidebar = () => (
-    <div className="hidden md:flex w-20 lg:w-64 bg-paper2 border-r border-rule flex-col h-full shrink-0 transition-all duration-300">
-      <a href="#landing" className="p-6 flex items-center gap-3" title="go to landing page">
-        <div className="w-8 h-8 bg-paper3 rounded-input flex items-center justify-center shrink-0 overflow-hidden border border-rule">
-          <img src="/logo-openshorts.png" alt="Logo" className="w-full h-full object-cover" />
-        </div>
-        <span className="font-display lowercase text-lg text-ink hidden lg:block">openshorts</span>
-      </a>
+    <div className={`hidden md:flex ${sidebarCollapsed ? 'w-16' : 'w-20 lg:w-64'} bg-paper2 border-r border-rule flex-col h-full shrink-0 transition-all duration-300 relative`}>
+      <div className={`p-4 flex items-center ${sidebarCollapsed ? 'justify-center flex-col gap-3' : 'justify-between'} border-b border-rule/50 shrink-0`}>
+        <a href="#landing" className="flex items-center gap-3 min-w-0" title="go to landing page">
+          <div className="w-8 h-8 bg-paper3 rounded-input flex items-center justify-center shrink-0 overflow-hidden border border-rule">
+            <img src="/logo-openshorts.png" alt="Logo" className="w-full h-full object-cover" />
+          </div>
+          {!sidebarCollapsed && (
+            <span className="font-display lowercase text-lg text-ink hidden lg:block truncate">openshorts</span>
+          )}
+        </a>
+        <button
+          onClick={toggleSidebar}
+          className="p-1.5 rounded-input text-muted hover:text-ink hover:bg-paper3 transition-colors shrink-0 cursor-pointer"
+          title={sidebarCollapsed ? "Expand sidebar (Perluas sidebar)" : "Minimize sidebar (Perkecil sidebar)"}
+          aria-label={sidebarCollapsed ? "Expand sidebar" : "Minimize sidebar"}
+        >
+          {sidebarCollapsed ? <PanelLeft size={17} className="text-brass" /> : <PanelLeftClose size={17} />}
+        </button>
+      </div>
 
-      <nav className="flex-1 px-4 py-4 space-y-1">
+      <nav className="flex-1 px-2 lg:px-4 py-4 space-y-1 overflow-y-auto custom-scrollbar">
         {navItems.map((item) => {
           const NavIcon = item.icon;
           const isActive = activeTab === item.id;
@@ -1042,24 +1073,28 @@ function App() {
               onClick={() => goToTab(item.id)}
               title={tabLocked(item.id) ? 'Finish your first clips to unlock' : item.label}
               disabled={tabLocked(item.id)}
-              className={`relative w-full flex items-center gap-3 px-3 py-2.5 rounded-input transition-colors ${isActive ? 'bg-paper3 text-ink' : 'text-muted hover:text-ink2 hover:bg-paper3/50'} ${tabLocked(item.id) ? 'opacity-40 cursor-not-allowed hover:bg-transparent hover:text-muted' : ''}`}
+              className={`relative w-full flex items-center ${sidebarCollapsed ? 'justify-center px-2' : 'justify-center lg:justify-start px-3'} py-2.5 rounded-input transition-colors ${isActive ? 'bg-paper3 text-ink' : 'text-muted hover:text-ink2 hover:bg-paper3/50'} ${tabLocked(item.id) ? 'opacity-40 cursor-not-allowed hover:bg-transparent hover:text-muted' : ''}`}
             >
               {isActive && (
                 <span className="absolute left-0 top-1.5 bottom-1.5 w-0.5 bg-brass rounded-full" aria-hidden="true" />
               )}
               <NavIcon size={18} className={`shrink-0 ${isActive ? 'text-brass' : ''}`} />
-              <span className="text-sm lowercase hidden lg:block flex-1 text-left truncate">{item.label}</span>
-              {tabLocked(item.id)
-                ? <Lock size={12} className="shrink-0 hidden lg:block" />
-                : item.byok ? <span className="readout hidden lg:block">BYOK</span> : null}
-              <span className="readout hidden lg:block">{item.ord}</span>
+              {!sidebarCollapsed && (
+                <>
+                  <span className="text-sm lowercase hidden lg:block flex-1 text-left truncate">{item.label}</span>
+                  {tabLocked(item.id)
+                    ? <Lock size={12} className="shrink-0 hidden lg:block" />
+                    : item.byok ? <span className="readout hidden lg:block">BYOK</span> : null}
+                  <span className="readout hidden lg:block">{item.ord}</span>
+                </>
+              )}
             </button>
           );
         })}
       </nav>
 
-      <div className="p-4 border-t border-rule space-y-1">
-        <NavFooterLinks collapsed />
+      <div className={`p-3 border-t border-rule space-y-1 ${sidebarCollapsed ? 'flex flex-col items-center' : ''}`}>
+        <NavFooterLinks collapsed={sidebarCollapsed} />
       </div>
     </div>
   );
@@ -1189,6 +1224,16 @@ function App() {
             >
               <Menu size={20} />
             </button>
+            {sidebarCollapsed && (
+              <button
+                onClick={toggleSidebar}
+                aria-label="expand sidebar"
+                className="hidden md:flex p-2 rounded-input text-muted hover:text-ink hover:bg-paper3 transition-colors shrink-0 cursor-pointer"
+                title="Expand sidebar (Perluas sidebar)"
+              >
+                <PanelLeft size={18} className="text-brass" />
+              </button>
+            )}
             <span data-tutorial="nav-clips" className="md:hidden font-display lowercase text-base text-ink truncate">
               {activeNav?.label || 'openshorts'}
             </span>
