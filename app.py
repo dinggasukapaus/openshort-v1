@@ -2713,10 +2713,69 @@ async def download_all_clips(job_id: str, request: Request):
     zip_path = os.path.join(output_dir, f"clips_{int(time.time())}.zip")
 
     def build_zip():
+        master_summary = []
+        master_summary.append("=" * 65)
+        master_summary.append(f"OPENSHORTS CLIPS METADATA & CAPTIONS SUMMARY")
+        master_summary.append(f"Job ID: {job_id}")
+        master_summary.append(f"Total Clips: {len(files)}")
+        master_summary.append(f"Generated at: {time.strftime('%Y-%m-%d %H:%M:%S')}")
+        master_summary.append("=" * 65 + "\n")
+
+        shorts_list = data.get('shorts', [])
+
         # Videos are already compressed; store instead of deflate for speed.
         with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_STORED) as zf:
             for i, path in files:
                 zf.write(path, arcname=f"clip_{i + 1:02d}_{os.path.basename(path)}")
+
+                # Extract clip metadata
+                clip_data = {}
+                if i < len(shorts_list):
+                    clip_data.update(shorts_list[i] or {})
+                if i < len(mem_clips):
+                    clip_data.update(mem_clips[i] or {})
+
+                title = clip_data.get('video_title_for_youtube_short') or f"Clip {i + 1}"
+                hook = clip_data.get('viral_hook_text') or (clip_data.get('auto_hook') or {}).get('text') or "-"
+                tiktok_desc = clip_data.get('video_description_for_tiktok') or ""
+                ig_desc = clip_data.get('video_description_for_instagram') or ""
+                score = clip_data.get('predicted_score', '-')
+                start_t = clip_data.get('start', 0)
+                end_t = clip_data.get('end', 0)
+                dur = f"{end_t - start_t:.1f}s" if (end_t and start_t) else "-"
+
+                clip_info = [
+                    "=" * 60,
+                    f"OPENSHORTS CLIP #{i + 1}",
+                    f"Viral Score: {score}/100 | Duration: {dur} ({start_t:.1f}s - {end_t:.1f}s)",
+                    "=" * 60,
+                    "",
+                    "📌 YOUTUBE SHORTS TITLE:",
+                    f"{title}",
+                    "",
+                    "⚡ VIRAL HOOK:",
+                    f"{hook}",
+                    "",
+                    "📱 TIKTOK CAPTION & TAGS:",
+                    f"{tiktok_desc}",
+                    "#shorts #viral #fyp #tiktok",
+                    "",
+                    "📸 INSTAGRAM REELS CAPTION:",
+                    f"{ig_desc}",
+                    "#reels #viral #explore",
+                    "",
+                ]
+                clip_text = "\n".join(clip_info)
+                zf.writestr(f"clip_{i + 1:02d}_info.txt", clip_text.encode('utf-8'))
+
+                # Append to master summary
+                master_summary.append(f"--- [CLIP #{i + 1:02d}] (Score: {score}/100) ---")
+                master_summary.append(f"Title: {title}")
+                master_summary.append(f"Hook: {hook}")
+                master_summary.append(f"Caption: {tiktok_desc}")
+                master_summary.append(f"Tags: #shorts #viral #fyp\n")
+
+            zf.writestr("ALL_CAPTIONS_AND_TAGS.txt", "\n".join(master_summary).encode('utf-8'))
 
     loop = asyncio.get_event_loop()
     await loop.run_in_executor(None, build_zip)

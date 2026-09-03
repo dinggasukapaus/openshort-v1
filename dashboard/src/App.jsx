@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Upload, Sparkles, Youtube, Instagram, Share2, ChevronDown, Check, Activity, LayoutDashboard, Settings, Plus, History, X, Terminal, Shield, LayoutGrid, Image, Globe, RotateCcw, Calendar, AlertTriangle, KeyRound, Bot, Users, Smartphone, ExternalLink, Copy, CheckCircle2, Mail, Loader2, Download, Menu, Lock, PanelLeftClose, PanelLeft } from 'lucide-react';
+import { Upload, Sparkles, Youtube, Instagram, Share2, ChevronDown, Check, Activity, LayoutDashboard, Settings, Plus, History, X, Terminal, Shield, LayoutGrid, Image, Globe, RotateCcw, Calendar, AlertTriangle, KeyRound, Bot, Users, Smartphone, ExternalLink, Copy, CheckCircle2, Mail, Loader2, Download, Menu, Lock, PanelLeftClose, PanelLeft, Filter, ArrowUpDown } from 'lucide-react';
 import KeyInput from './components/KeyInput';
 import MediaInput from './components/MediaInput';
 import McpConnectCard from './components/McpConnectCard';
@@ -281,6 +281,60 @@ function App() {
         return sb - sa || a.index - b.index;
       });
   }, [results]);
+
+  const [clipFilter, setClipFilter] = useState('all'); // 'all' | 'starred' | 'draft' | 'review' | 'approved' | 'posted'
+  const [clipSort, setClipSort] = useState('score'); // 'score' | 'order'
+  const [filterRefreshKey, setFilterRefreshKey] = useState(0);
+
+  const filterCounts = useMemo(() => {
+    const clips = results?.clips;
+    if (!Array.isArray(clips)) return { all: 0, starred: 0, draft: 0, review: 0, approved: 0, posted: 0 };
+    const counts = { all: clips.length, starred: 0, draft: 0, review: 0, approved: 0, posted: 0 };
+    clips.forEach((_, index) => {
+      try {
+        const status = localStorage.getItem(`openshorts_clip_${jobId}_${index}_status`) || 'draft';
+        const starred = localStorage.getItem(`openshorts_clip_${jobId}_${index}_starred`) === 'true';
+        if (starred) counts.starred++;
+        if (counts[status] !== undefined) counts[status]++;
+      } catch {}
+    });
+    return counts;
+  }, [results, jobId, filterRefreshKey]);
+
+  const displayClips = useMemo(() => {
+    const clips = results?.clips;
+    if (!Array.isArray(clips)) return [];
+
+    let mapped = clips.map((clip, index) => {
+      let status = 'draft';
+      let starred = false;
+      try {
+        status = localStorage.getItem(`openshorts_clip_${jobId}_${index}_status`) || 'draft';
+        starred = localStorage.getItem(`openshorts_clip_${jobId}_${index}_starred`) === 'true';
+      } catch {}
+      return { clip, index, status, starred };
+    });
+
+    // 1. Filter
+    if (clipFilter === 'starred') {
+      mapped = mapped.filter(c => c.starred);
+    } else if (clipFilter !== 'all') {
+      mapped = mapped.filter(c => c.status === clipFilter);
+    }
+
+    // 2. Sort
+    if (clipSort === 'score') {
+      mapped.sort((a, b) => {
+        const sa = Number.isFinite(a.clip?.predicted_score) ? a.clip.predicted_score : -1;
+        const sb = Number.isFinite(b.clip?.predicted_score) ? b.clip.predicted_score : -1;
+        return sb - sa || a.index - b.index;
+      });
+    } else if (clipSort === 'order') {
+      mapped.sort((a, b) => a.index - b.index);
+    }
+
+    return mapped;
+  }, [results, jobId, clipFilter, clipSort, filterRefreshKey]);
   // Bulk subtitles: apply one style to every clip of the job (triggered from
   // within a clip's subtitle modal via "apply to all").
   const [bulkSub, setBulkSub] = useState({ running: false, current: 0, total: 0, errors: 0 });
@@ -1992,33 +2046,92 @@ function App() {
 
                 <div className="flex-1 overflow-y-auto custom-scrollbar p-1">
                   {results && results.clips && results.clips.length > 0 ? (
-                    <div className={`grid gap-4 pb-10 ${status === 'complete' ? 'grid-cols-1 xl:grid-cols-2' : 'grid-cols-1'}`}>
-                      {rankedClips.map(({ clip, index: i }) => (
-                        <ResultCard
-                          key={`${jobId}-${i}-${clip.video_url || ''}`}
-                          clip={clip}
-                          index={i}
-                          jobId={jobId}
-                          onEditClip={(index) => setEditingClip(index)}
-                          onReframeClip={(index) => setReframingClip(index)}
-                          initialState={projectState?.clips?.find((c) => c.index === i) || null}
-                          onStateChange={handleClipStateChange}
-                          durable={durableClips[i]}
-                          uploadPostKey={uploadPostKey}
-                          uploadUserId={uploadUserId}
-                          geminiApiKey={apiKey}
-                          elevenLabsKey={elevenLabsKey}
-                          isManaged={isManaged}
-                          connectedPlatforms={(userProfiles.find((p) => p.username === uploadUserId) || userProfiles[0])?.connected ?? null}
-                          onConnectSocials={isManaged ? handleConnectSocials : null}
-                          onPlay={(time) => handleClipPlay(time)}
-                          onPause={handleClipPause}
-                          onBulkSubtitle={handleBulkSubtitles}
-                          clipCount={results.clips.length}
-                          bulkProgress={bulkSub}
-                        />
-                      ))}
-                    </div>
+                    <>
+                      {/* Filter & Sort Toolbar for Clipper */}
+                      {status === 'complete' && results.clips.length > 0 && (
+                        <div className="flex flex-wrap items-center justify-between gap-3 p-3 mb-4 rounded-card bg-paper2 border border-rule shadow-xs">
+                          {/* Filter status buttons */}
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <span className="text-xs font-mono uppercase text-muted mr-1 flex items-center gap-1">
+                              <Filter size={12} /> Filter:
+                            </span>
+                            {[
+                              { id: 'all', label: `Semua (${filterCounts.all})` },
+                              { id: 'starred', label: `⭐ Prioritas (${filterCounts.starred})` },
+                              { id: 'draft', label: `Draft (${filterCounts.draft})` },
+                              { id: 'review', label: `Review (${filterCounts.review})` },
+                              { id: 'approved', label: `Approved (${filterCounts.approved})` },
+                              { id: 'posted', label: `Posted (${filterCounts.posted})` },
+                            ].map((f) => (
+                              <button
+                                key={f.id}
+                                onClick={() => setClipFilter(f.id)}
+                                className={`px-2.5 py-1 rounded-full text-xs transition-all cursor-pointer border ${
+                                  clipFilter === f.id
+                                    ? 'bg-paper3 text-ink border-brass font-medium shadow-xs'
+                                    : 'border-rule text-muted hover:text-ink hover:bg-paper3/50'
+                                }`}
+                              >
+                                {f.label}
+                              </button>
+                            ))}
+                          </div>
+
+                          {/* Sort dropdown */}
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-mono uppercase text-muted flex items-center gap-1">
+                              <ArrowUpDown size={12} /> Urutkan:
+                            </span>
+                            <select
+                              value={clipSort}
+                              onChange={(e) => setClipSort(e.target.value)}
+                              className="bg-paper border border-rule rounded-input px-2.5 py-1 text-xs text-ink focus:outline-none focus:border-brass cursor-pointer"
+                            >
+                              <option value="score">🔥 Skor Viral Tertinggi</option>
+                              <option value="order">⏱️ Urutan Kronologis Video</option>
+                            </select>
+                          </div>
+                        </div>
+                      )}
+
+                      {displayClips.length === 0 ? (
+                        <div className="p-8 text-center text-muted border border-dashed border-rule rounded-card my-4">
+                          <p className="text-sm">Tidak ada klip dengan filter "{clipFilter}".</p>
+                          <button onClick={() => setClipFilter('all')} className="mt-2 text-xs text-brass underline cursor-pointer">
+                            Tampilkan semua klip
+                          </button>
+                        </div>
+                      ) : (
+                        <div className={`grid gap-4 pb-10 ${status === 'complete' ? 'grid-cols-1 xl:grid-cols-2' : 'grid-cols-1'}`}>
+                          {displayClips.map(({ clip, index: i }) => (
+                            <ResultCard
+                              key={`${jobId}-${i}-${clip.video_url || ''}`}
+                              clip={clip}
+                              index={i}
+                              jobId={jobId}
+                              onEditClip={(index) => setEditingClip(index)}
+                              onReframeClip={(index) => setReframingClip(index)}
+                              initialState={projectState?.clips?.find((c) => c.index === i) || null}
+                              onStateChange={handleClipStateChange}
+                              onStatusChange={() => setFilterRefreshKey((k) => k + 1)}
+                              durable={durableClips[i]}
+                              uploadPostKey={uploadPostKey}
+                              uploadUserId={uploadUserId}
+                              geminiApiKey={apiKey}
+                              elevenLabsKey={elevenLabsKey}
+                              isManaged={isManaged}
+                              connectedPlatforms={(userProfiles.find((p) => p.username === uploadUserId) || userProfiles[0])?.connected ?? null}
+                              onConnectSocials={isManaged ? handleConnectSocials : null}
+                              onPlay={(time) => handleClipPlay(time)}
+                              onPause={handleClipPause}
+                              onBulkSubtitle={handleBulkSubtitles}
+                              clipCount={results.clips.length}
+                              bulkProgress={bulkSub}
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </>
                   ) : (
                     status === 'processing' ? (
                       <div className="h-full min-h-[140px] flex flex-col items-center justify-center text-muted space-y-3 text-center px-4">

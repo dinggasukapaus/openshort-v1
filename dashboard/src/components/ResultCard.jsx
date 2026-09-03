@@ -37,7 +37,7 @@ function formatDuration(clip) {
     return `${String(Math.floor(secs / 60)).padStart(2, '0')}:${String(secs % 60).padStart(2, '0')}`;
 }
 
-export default function ResultCard({ clip, index, jobId, durable, uploadPostKey, uploadUserId, geminiApiKey, elevenLabsKey, isManaged, onPlay, onPause, onBulkSubtitle, clipCount = 1, bulkProgress, initialState = null, onStateChange, connectedPlatforms = null, onConnectSocials, onEditClip = null, onReframeClip = null }) {
+export default function ResultCard({ clip, index, jobId, durable, uploadPostKey, uploadUserId, geminiApiKey, elevenLabsKey, isManaged, onPlay, onPause, onBulkSubtitle, clipCount = 1, bulkProgress, initialState = null, onStateChange, onStatusChange = null, connectedPlatforms = null, onConnectSocials, onEditClip = null, onReframeClip = null }) {
     const [showModal, setShowModal] = useState(false);
     const [showDescModal, setShowDescModal] = useState(false);
     const [showSubtitleModal, setShowSubtitleModal] = useState(false);
@@ -106,6 +106,7 @@ export default function ResultCard({ clip, index, jobId, durable, uploadPostKey,
         try {
             localStorage.setItem(`openshorts_clip_${jobId}_${index}_status`, next);
         } catch {}
+        if (onStatusChange) onStatusChange(index, next, isStarred);
     };
 
     const toggleStarred = (e) => {
@@ -115,6 +116,7 @@ export default function ResultCard({ clip, index, jobId, durable, uploadPostKey,
         try {
             localStorage.setItem(`openshorts_clip_${jobId}_${index}_starred`, String(next));
         } catch {}
+        if (onStatusChange) onStatusChange(index, clipStatus, next);
     };
 
     const cycleSafeZone = (e) => {
