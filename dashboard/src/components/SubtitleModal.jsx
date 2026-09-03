@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Loader2, Shield, Star, Check } from 'lucide-react';
+import { Loader2, Shield, Star, Check, Search } from 'lucide-react';
 import { apiFetch } from '../lib/api';
 import RemotionPreview from './RemotionPreview';
 import Modal from './ui/Modal';
@@ -181,6 +181,31 @@ export default function SubtitleModal({ isOpen, onClose, onGenerate, onApplyAll,
             endMs: Math.round(startMs + (i + 1) * wordDurationMs),
         }));
         setCaptions(newCaptions);
+    };
+
+    const [findWord, setFindWord] = useState('');
+    const [replaceWord, setReplaceWord] = useState('');
+    const [matchCase, setMatchCase] = useState(false);
+    const [replaceMsg, setReplaceMsg] = useState('');
+
+    const handleFindReplace = () => {
+        if (!findWord.trim()) return;
+        try {
+            const escaped = findWord.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const regex = new RegExp(escaped, matchCase ? 'g' : 'gi');
+            const matches = (editableText.match(regex) || []).length;
+            if (matches === 0) {
+                setReplaceMsg(`Tidak ada kata "${findWord}"`);
+                setTimeout(() => setReplaceMsg(''), 2500);
+                return;
+            }
+            const updated = editableText.replace(regex, replaceWord);
+            handleTextEdit(updated);
+            setReplaceMsg(`✓ ${matches} kata diganti!`);
+            setTimeout(() => setReplaceMsg(''), 2500);
+        } catch {
+            setReplaceMsg('Format pencarian tidak valid');
+        }
     };
 
     if (!isOpen) return null;
@@ -396,13 +421,62 @@ export default function SubtitleModal({ isOpen, onClose, onGenerate, onApplyAll,
                                     <span className={`text-muted transition-transform ${showTextEditor ? 'rotate-180' : ''}`}>▾</span>
                                 </button>
                                 {showTextEditor && (
-                                    <textarea
-                                        value={editableText}
-                                        onChange={(e) => handleTextEdit(e.target.value)}
-                                        rows={5}
-                                        className="input-field resize-none leading-relaxed animate-fade"
-                                        placeholder="Edit subtitle text..."
-                                    />
+                                    <div className="space-y-2 animate-fade">
+                                        {/* Quick Find & Replace Tool */}
+                                        <div className="p-2.5 rounded-input bg-paper3/60 border border-rule space-y-2">
+                                            <div className="flex items-center justify-between text-xs">
+                                                <span className="eyebrow flex items-center gap-1">
+                                                    <Search size={11} /> Find & Replace Typo
+                                                </span>
+                                                {replaceMsg && (
+                                                    <span className="text-[11px] text-brass font-medium">{replaceMsg}</span>
+                                                )}
+                                            </div>
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                                                <input
+                                                    type="text"
+                                                    placeholder="Cari kata salah (e.g. Jimny)"
+                                                    value={findWord}
+                                                    onChange={(e) => setFindWord(e.target.value)}
+                                                    className="bg-paper border border-rule rounded px-2 py-1 text-xs text-ink focus:outline-none focus:border-brass"
+                                                />
+                                                <input
+                                                    type="text"
+                                                    placeholder="Ganti dengan (e.g. Gemini)"
+                                                    value={replaceWord}
+                                                    onChange={(e) => setReplaceWord(e.target.value)}
+                                                    className="bg-paper border border-rule rounded px-2 py-1 text-xs text-ink focus:outline-none focus:border-brass"
+                                                />
+                                            </div>
+                                            <div className="flex items-center justify-between pt-0.5">
+                                                <label className="text-[11px] text-muted flex items-center gap-1 cursor-pointer">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={matchCase}
+                                                        onChange={(e) => setMatchCase(e.target.checked)}
+                                                        className="rounded border-rule accent-brass"
+                                                    />
+                                                    <span>Match Case (Aa)</span>
+                                                </label>
+                                                <button
+                                                    type="button"
+                                                    onClick={handleFindReplace}
+                                                    disabled={!findWord.trim()}
+                                                    className="px-2.5 py-1 text-xs rounded bg-paper border border-rule hover:border-brass text-ink transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer font-medium"
+                                                >
+                                                    Replace All
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <textarea
+                                            value={editableText}
+                                            onChange={(e) => handleTextEdit(e.target.value)}
+                                            rows={5}
+                                            className="input-field resize-none leading-relaxed"
+                                            placeholder="Edit subtitle text..."
+                                        />
+                                    </div>
                                 )}
                             </div>
                         )}

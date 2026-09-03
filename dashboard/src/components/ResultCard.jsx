@@ -37,11 +37,21 @@ function formatDuration(clip) {
     return `${String(Math.floor(secs / 60)).padStart(2, '0')}:${String(secs % 60).padStart(2, '0')}`;
 }
 
+const NICHE_PRESETS = [
+    { id: 'general', label: '🔥 Umum', tags: '#shorts #viral #fyp #reels #tiktok' },
+    { id: 'tech_ai', label: '🤖 AI & Tech', tags: '#ai #tech #artificialintelligence #coding #gemini #shorts' },
+    { id: 'business', label: '💼 Bisnis & Cuan', tags: '#bisnis #keuangan #investasi #entrepreneur #cuan #finansial' },
+    { id: 'motivation', label: '💡 Motivasi', tags: '#motivasi #inspirasi #sukses #mindset #selfimprovement #quotes' },
+    { id: 'podcast', label: '🎙️ Podcast', tags: '#podcast #talkshow #cerita #ngobrol #insight #viral' },
+    { id: 'comedy', label: '😂 Hiburan', tags: '#lucu #ngakak #komedi #hiburan #reelslucu #fyp' },
+];
+
 export default function ResultCard({ clip, index, jobId, durable, uploadPostKey, uploadUserId, geminiApiKey, elevenLabsKey, isManaged, onPlay, onPause, onBulkSubtitle, clipCount = 1, bulkProgress, initialState = null, onStateChange, onStatusChange = null, connectedPlatforms = null, onConnectSocials, onEditClip = null, onReframeClip = null }) {
     const [showModal, setShowModal] = useState(false);
     const [showDescModal, setShowDescModal] = useState(false);
     const [showSubtitleModal, setShowSubtitleModal] = useState(false);
     const [showWatermarkModal, setShowWatermarkModal] = useState(false);
+    const [selectedNiche, setSelectedNiche] = useState('general');
     const { plan } = useAuth();
     const videoRef = React.useRef(null);
     // Pristine base clip (no burned subtitles/hook), stable regardless of how
@@ -130,13 +140,14 @@ export default function ResultCard({ clip, index, jobId, durable, uploadPostKey,
         const title = clip.video_title_for_youtube_short || "Viral Short Video";
         const hook = clip.viral_hook_text || (clip.auto_hook?.text) || "";
         const caption = clip.video_description_for_tiktok || clip.video_description_for_instagram || "";
-        const tags = "#shorts #viral #reels #tiktok #fyp";
+        const nicheObj = NICHE_PRESETS.find(n => n.id === selectedNiche) || NICHE_PRESETS[0];
+        const tags = nicheObj.tags;
 
         let text = `📌 TITLE / JUDUL:\n${title}\n\n`;
         if (hook) {
             text += `⚡ VIRAL HOOK:\n${hook}\n\n`;
         }
-        text += `📝 CAPTION & TAGS:\n${caption}\n${tags}`;
+        text += `📝 CAPTION & TAGS (${nicheObj.label}):\n${caption}\n\n${tags}`;
 
         navigator.clipboard.writeText(text);
         setCopiedAll(true);
@@ -959,6 +970,25 @@ export default function ResultCard({ clip, index, jobId, durable, uploadPostKey,
                         >
                             {copied === 'caption' ? <Check size={14} className="text-ok" /> : <Copy size={14} />}
                         </button>
+                    </div>
+
+                    {/* Niche Hashtags Selector */}
+                    <div className="flex items-center gap-1.5 overflow-x-auto py-0.5 custom-scrollbar">
+                        <span className="text-[10px] uppercase font-mono text-muted shrink-0">Tags:</span>
+                        {NICHE_PRESETS.map((n) => (
+                            <button
+                                key={n.id}
+                                onClick={() => setSelectedNiche(n.id)}
+                                className={`px-2 py-0.5 rounded-full text-[11px] whitespace-nowrap transition-colors border cursor-pointer ${
+                                    selectedNiche === n.id
+                                        ? 'bg-paper3 text-brass border-brass/60 font-medium shadow-xs'
+                                        : 'border-rule text-muted hover:text-ink hover:bg-paper3/50'
+                                }`}
+                                title={`Gunakan hashtag niche ${n.label}`}
+                            >
+                                {n.label}
+                            </button>
+                        ))}
                     </div>
 
                     <div className="flex gap-2 pt-1">
