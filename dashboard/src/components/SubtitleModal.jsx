@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Shield } from 'lucide-react';
 import { apiFetch } from '../lib/api';
 import RemotionPreview from './RemotionPreview';
 import Modal from './ui/Modal';
 import SegmentedControl from './ui/SegmentedControl';
+import SafeZoneOverlay from './SafeZoneOverlay';
 
 const FONT_OPTIONS = [
     { value: 'Verdana', label: 'Verdana' },
@@ -77,6 +78,7 @@ export default function SubtitleModal({ isOpen, onClose, onGenerate, onApplyAll,
     const [bgOpacity, setBgOpacity] = useState(0.0);
     const [animation, setAnimation] = useState('pop');
     const [showTextEditor, setShowTextEditor] = useState(false);
+    const [safeZoneMode, setSafeZoneMode] = useState('tiktok'); // tiktok | reels | shorts | off
 
     // Karaoke (server-side ASS burn) state
     const [style, setStyle] = useState('classic'); // classic | karaoke
@@ -207,7 +209,29 @@ export default function SubtitleModal({ isOpen, onClose, onGenerate, onApplyAll,
         <Modal isOpen={isOpen} onClose={onClose} size="xl" eyebrow="EDITOR · SUBTITLES" title="subtitles">
             <div className="flex flex-col md:flex-row gap-6">
                 {/* Left: Preview */}
-                <div className="flex-1 flex flex-col items-center justify-center bg-black rounded-card border border-rule overflow-hidden relative aspect-[9/16] max-h-[600px]">
+                <div className="flex-1 flex flex-col items-center justify-center bg-black rounded-card border border-rule overflow-hidden relative aspect-[9/16] max-h-[600px] group/preview">
+                    {/* Safe Zone Guides for accurate subtitle positioning */}
+                    <SafeZoneOverlay mode={safeZoneMode} />
+
+                    {/* Safe Zone Toggle in Preview Header */}
+                    <div className="absolute top-2 right-2 z-30">
+                        <button
+                            type="button"
+                            onClick={() => {
+                                const modes = ['tiktok', 'reels', 'shorts', 'off'];
+                                setSafeZoneMode(modes[(modes.indexOf(safeZoneMode) + 1) % modes.length]);
+                            }}
+                            title={`Safe Zone Guide: ${safeZoneMode.toUpperCase()} (Click to toggle)`}
+                            className={`px-2 py-1 rounded-full text-[10px] font-mono uppercase flex items-center gap-1 transition-all backdrop-blur-sm border shadow-sm cursor-pointer ${
+                                safeZoneMode !== 'off'
+                                    ? 'bg-red-500/80 text-white border-red-400'
+                                    : 'bg-black/60 text-white/70 border-white/20 hover:text-white hover:bg-black/80'
+                            }`}
+                        >
+                            <Shield size={11} />
+                            <span>Safe Zone: {safeZoneMode}</span>
+                        </button>
+                    </div>
                     {captionsLoading ? (
                         <div className="flex items-center gap-2 text-muted">
                             <Loader2 size={16} className="animate-spin" />

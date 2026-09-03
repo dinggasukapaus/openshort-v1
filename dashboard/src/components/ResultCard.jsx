@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Download, Share2, Instagram, Youtube, Video, AlertCircle, Loader2, Copy, Check, Wand2, Type, Calendar, Languages, FileText, Link2, Scissors, Crosshair, TrendingUp } from 'lucide-react';
+import { Download, Share2, Instagram, Youtube, Video, AlertCircle, Loader2, Copy, Check, Wand2, Type, Calendar, Languages, FileText, Link2, Scissors, Crosshair, TrendingUp, Shield, Star, Sparkles } from 'lucide-react';
 import { getApiUrl } from '../config';
 import { apiFetch } from '../lib/api';
 import SubtitleModal from './SubtitleModal';
@@ -9,6 +9,7 @@ import Modal from './ui/Modal';
 import SegmentedControl from './ui/SegmentedControl';
 import WatermarkModal, { watermarkNoticeDismissed } from './WatermarkModal';
 import TikTokDraftNotice from './TikTokDraftNotice';
+import SafeZoneOverlay from './SafeZoneOverlay';
 import { useAuth } from '../contexts/AuthContext';
 import { renderInBrowser } from '../lib/renderInBrowser';
 
@@ -79,8 +80,66 @@ export default function ResultCard({ clip, index, jobId, durable, uploadPostKey,
 
     // A delivered clip is tens of MB, and on a slow link the old silent
     // fetch-then-save took minutes with nothing on screen, which reads as a dead
-    // button. Stream it instead and report progress.
     const [downloadPct, setDownloadPct] = useState(null);
+    const [safeZoneMode, setSafeZoneMode] = useState('off'); // 'off' | 'tiktok' | 'reels' | 'shorts'
+    const [clipStatus, setClipStatus] = useState(() => {
+        try {
+            return localStorage.getItem(`openshorts_clip_${jobId}_${index}_status`) || 'draft';
+        } catch {
+            return 'draft';
+        }
+    });
+    const [isStarred, setIsStarred] = useState(() => {
+        try {
+            return localStorage.getItem(`openshorts_clip_${jobId}_${index}_starred`) === 'true';
+        } catch {
+            return false;
+        }
+    });
+    const [copiedAll, setCopiedAll] = useState(false);
+
+    const cycleStatus = (e) => {
+        e.stopPropagation();
+        const order = ['draft', 'review', 'approved', 'posted'];
+        const next = order[(order.indexOf(clipStatus) + 1) % order.length];
+        setClipStatus(next);
+        try {
+            localStorage.setItem(`openshorts_clip_${jobId}_${index}_status`, next);
+        } catch {}
+    };
+
+    const toggleStarred = (e) => {
+        e.stopPropagation();
+        const next = !isStarred;
+        setIsStarred(next);
+        try {
+            localStorage.setItem(`openshorts_clip_${jobId}_${index}_starred`, String(next));
+        } catch {}
+    };
+
+    const cycleSafeZone = (e) => {
+        e.stopPropagation();
+        const modes = ['off', 'tiktok', 'reels', 'shorts'];
+        const next = modes[(modes.indexOf(safeZoneMode) + 1) % modes.length];
+        setSafeZoneMode(next);
+    };
+
+    const copyAllMeta = () => {
+        const title = clip.video_title_for_youtube_short || "Viral Short Video";
+        const hook = clip.viral_hook_text || (clip.auto_hook?.text) || "";
+        const caption = clip.video_description_for_tiktok || clip.video_description_for_instagram || "";
+        const tags = "#shorts #viral #reels #tiktok #fyp";
+
+        let text = `📌 TITLE / JUDUL:\n${title}\n\n`;
+        if (hook) {
+            text += `⚡ VIRAL HOOK:\n${hook}\n\n`;
+        }
+        text += `📝 CAPTION & TAGS:\n${caption}\n${tags}`;
+
+        navigator.clipboard.writeText(text);
+        setCopiedAll(true);
+        setTimeout(() => setCopiedAll(false), 2000);
+    };
 
     const downloadClip = async () => {
         try {
@@ -771,7 +830,12 @@ export default function ResultCard({ clip, index, jobId, durable, uploadPostKey,
                         }
                     }}
                 />
-                <div className="absolute top-3 left-3 flex gap-2">
+
+                {/* Safe Zone Overlay for 9:16 vertical video */}
+                <SafeZoneOverlay mode={safeZoneMode} />
+
+                {/* Top Left Badges: Clip Index, Score, and Workflow Status */}
+                <div className="absolute top-3 left-3 flex flex-wrap gap-1.5 z-30">
                     {/* Stays the clip's own number, not its rank: the cards are
                         ordered by score, but this is what the downloaded file
                         is called (clip-N.mp4) and what every api call indexes. */}
@@ -798,6 +862,47 @@ export default function ResultCard({ clip, index, jobId, durable, uploadPostKey,
                             <span className="text-muted">/100</span>
                         </span>
                     )}
+                    {/* Workflow Status Pill */}
+                    <button
+                        onClick={cycleStatus}
+                        title={`Workflow Status: ${clipStatus.toUpperCase()} (Click to cycle: Draft -> Review -> Approved -> Posted)`}
+                        className={`font-mono text-micro uppercase px-2 py-0.5 rounded-full border transition-all cursor-pointer backdrop-blur-sm ${
+                            clipStatus === 'approved' ? 'bg-emerald-500/30 text-emerald-300 border-emerald-400/50' :
+                            clipStatus === 'review' ? 'bg-blue-500/30 text-blue-300 border-blue-400/50' :
+                            clipStatus === 'posted' ? 'bg-purple-500/30 text-purple-300 border-purple-400/50' :
+                            'bg-amber-500/30 text-amber-300 border-amber-400/50'
+                        }`}
+                    >
+                        ● {clipStatus}
+                    </button>
+                </div>
+
+                {/* Top Right Video Overlay Tools: Safe Zone & Star */}
+                <div className="absolute top-3 right-3 flex items-center gap-1.5 z-30">
+                    <button
+                        onClick={cycleSafeZone}
+                        title={`Safe Zone: ${safeZoneMode.toUpperCase()} (Click to switch TikTok / Reels / Shorts / Off)`}
+                        className={`px-2 py-1 rounded-full text-[10px] font-mono uppercase flex items-center gap-1 transition-all backdrop-blur-sm border shadow-sm ${
+                            safeZoneMode !== 'off'
+                                ? 'bg-red-500/80 text-white border-red-400'
+                                : 'bg-black/60 text-white/70 border-white/20 hover:text-white hover:bg-black/80'
+                        }`}
+                    >
+                        <Shield size={11} className={safeZoneMode !== 'off' ? 'text-white' : 'text-white/60'} />
+                        <span>{safeZoneMode === 'off' ? 'Safe Zone' : safeZoneMode}</span>
+                    </button>
+
+                    <button
+                        onClick={toggleStarred}
+                        title={isStarred ? "Priority Clip (Starred)" : "Mark as Priority"}
+                        className={`p-1.5 rounded-full transition-all backdrop-blur-sm border shadow-sm ${
+                            isStarred
+                                ? 'bg-amber-500/90 text-black border-amber-300'
+                                : 'bg-black/60 text-white/60 border-white/20 hover:text-amber-300 hover:bg-black/80'
+                        }`}
+                    >
+                        <Star size={12} className={isStarred ? "fill-black" : ""} />
+                    </button>
                 </div>
 
                 {/* Auto Edit Overlay if Processing */}
@@ -854,12 +959,32 @@ export default function ResultCard({ clip, index, jobId, durable, uploadPostKey,
                         </button>
                     </div>
 
-                    <button
-                        onClick={() => setShowDescModal(true)}
-                        className="w-full flex items-center justify-center gap-2 py-2 rounded-input border border-dashed border-rule text-xs lowercase text-muted hover:text-brass hover:border-rule2 transition-colors"
-                    >
-                        <FileText size={14} /> view descriptions
-                    </button>
+                    <div className="flex gap-2 pt-1">
+                        <button
+                            onClick={copyAllMeta}
+                            className="flex-1 flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-input bg-paper2 hover:bg-paper3 border border-rule hover:border-brass/60 text-xs text-ink transition-all font-medium cursor-pointer"
+                            title="Copy Title, Hook, and Caption formatted for social media"
+                        >
+                            {copiedAll ? (
+                                <>
+                                    <Check size={14} className="text-ok" />
+                                    <span className="text-ok font-semibold">Meta Copied to Clipboard!</span>
+                                </>
+                            ) : (
+                                <>
+                                    <Sparkles size={14} className="text-brass" />
+                                    <span>Copy All Meta (Title, Hook & Caption)</span>
+                                </>
+                            )}
+                        </button>
+                        <button
+                            onClick={() => setShowDescModal(true)}
+                            className="flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-input border border-dashed border-rule text-xs text-muted hover:text-brass hover:border-rule2 transition-colors shrink-0 cursor-pointer"
+                            title="View and edit individual descriptions"
+                        >
+                            <FileText size={13} /> view
+                        </button>
+                    </div>
                 </div>
 
                 {/* Error Message */}
