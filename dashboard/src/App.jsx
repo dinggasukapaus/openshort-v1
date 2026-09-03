@@ -293,6 +293,30 @@ function App() {
           const next = speeds.find(s => s > curr) || 2;
           playingVideo.playbackRate = next;
         }
+      } else if (e.key === 't' || e.key === 'T') {
+        if (playingVideo) {
+          e.preventDefault();
+          try {
+            const canvas = document.createElement('canvas');
+            canvas.width = playingVideo.videoWidth || 1080;
+            canvas.height = playingVideo.videoHeight || 1920;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(playingVideo, 0, 0, canvas.width, canvas.height);
+            canvas.toBlob((blob) => {
+              if (!blob) return;
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `cover_${(jobId || 'clip').slice(0, 8)}_frame.png`;
+              document.body.appendChild(a);
+              a.click();
+              a.remove();
+              URL.revokeObjectURL(url);
+            }, 'image/png');
+          } catch (err) {
+            console.error('Frame capture failed:', err);
+          }
+        }
       }
     };
 
@@ -409,6 +433,26 @@ function App() {
 
     return mapped;
   }, [results, jobId, clipFilter, clipSort, filterRefreshKey]);
+
+  const handleApproveAllVisible = () => {
+    if (!displayClips.length || !jobId) return;
+    displayClips.forEach(({ index }) => {
+      try {
+        localStorage.setItem(`openshorts_clip_${jobId}_${index}_status`, 'approved');
+      } catch {}
+    });
+    setFilterRefreshKey(k => k + 1);
+  };
+
+  const handleStarAllVisible = () => {
+    if (!displayClips.length || !jobId) return;
+    displayClips.forEach(({ index }) => {
+      try {
+        localStorage.setItem(`openshorts_clip_${jobId}_${index}_starred`, 'true');
+      } catch {}
+    });
+    setFilterRefreshKey(k => k + 1);
+  };
   // Bulk subtitles: apply one style to every clip of the job (triggered from
   // within a clip's subtitle modal via "apply to all").
   const [bulkSub, setBulkSub] = useState({ running: false, current: 0, total: 0, errors: 0 });
@@ -2181,19 +2225,42 @@ function App() {
                             ))}
                           </div>
 
-                          {/* Sort dropdown */}
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs font-mono uppercase text-muted flex items-center gap-1">
-                              <ArrowUpDown size={12} /> Urutkan:
-                            </span>
-                            <select
-                              value={clipSort}
-                              onChange={(e) => setClipSort(e.target.value)}
-                              className="bg-paper border border-rule rounded-input px-2.5 py-1 text-xs text-ink focus:outline-none focus:border-brass cursor-pointer"
-                            >
-                              <option value="score">🔥 Skor Viral Tertinggi</option>
-                              <option value="order">⏱️ Urutan Kronologis Video</option>
-                            </select>
+                          {/* Sort dropdown & Batch Actions */}
+                          <div className="flex flex-wrap items-center gap-2">
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-xs font-mono uppercase text-muted flex items-center gap-1">
+                                <ArrowUpDown size={12} /> Urutkan:
+                              </span>
+                              <select
+                                value={clipSort}
+                                onChange={(e) => setClipSort(e.target.value)}
+                                className="bg-paper border border-rule rounded-input px-2.5 py-1 text-xs text-ink focus:outline-none focus:border-brass cursor-pointer"
+                              >
+                                <option value="score">🔥 Skor Viral Tertinggi</option>
+                                <option value="order">⏱️ Urutan Kronologis Video</option>
+                              </select>
+                            </div>
+
+                            {displayClips.length > 0 && (
+                              <div className="flex items-center gap-1.5 pl-2 border-l border-rule">
+                                <button
+                                  onClick={handleApproveAllVisible}
+                                  className="px-2 py-1 text-[11px] rounded-input bg-paper hover:bg-paper3 border border-rule hover:border-emerald-500 text-ink transition-colors flex items-center gap-1 cursor-pointer font-medium"
+                                  title={`Tandai ${displayClips.length} klip yang tampil sebagai Approved`}
+                                >
+                                  <CheckCircle2 size={11} className="text-emerald-400" />
+                                  <span className="hidden sm:inline">Approve All</span> ({displayClips.length})
+                                </button>
+                                <button
+                                  onClick={handleStarAllVisible}
+                                  className="px-2 py-1 text-[11px] rounded-input bg-paper hover:bg-paper3 border border-rule hover:border-amber-400 text-ink transition-colors flex items-center gap-1 cursor-pointer font-medium"
+                                  title={`Beri bintang ⭐ pada ${displayClips.length} klip yang tampil`}
+                                >
+                                  <Star size={11} className="text-amber-400 fill-amber-400" />
+                                  <span className="hidden sm:inline">Star All</span> ({displayClips.length})
+                                </button>
+                              </div>
+                            )}
                           </div>
                         </div>
                       )}

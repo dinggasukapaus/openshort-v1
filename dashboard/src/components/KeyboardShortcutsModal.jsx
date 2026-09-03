@@ -1,6 +1,6 @@
 import React from 'react';
 import Modal from './ui/Modal';
-import { Keyboard, Play, FastForward, Rewind, Shield, Star, Copy, X } from 'lucide-react';
+import { Keyboard, Play, FastForward, Rewind, Shield, Star, Copy, X, Camera } from 'lucide-react';
 
 export default function KeyboardShortcutsModal({ isOpen, onClose }) {
   if (!isOpen) return null;
@@ -22,6 +22,7 @@ export default function KeyboardShortcutsModal({ isOpen, onClose }) {
         { key: 'M', desc: 'Toggle Safe Zone (TikTok / Reels / Shorts / Off)', icon: <Shield size={13} /> },
         { key: 'S', desc: 'Star ⭐ / Prioritaskan klip aktif', icon: <Star size={13} /> },
         { key: 'C', desc: 'Salin Seluruh Metadata (Title + Hook + Caption)', icon: <Copy size={13} /> },
+        { key: 'T', desc: 'Tangkap Frame HD Cover / Thumbnail (PNG)', icon: <Camera size={13} /> },
       ],
     },
     {

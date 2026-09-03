@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Download, Share2, Instagram, Youtube, Video, AlertCircle, Loader2, Copy, Check, Wand2, Type, Calendar, Languages, FileText, Link2, Scissors, Crosshair, TrendingUp, Shield, Star, Sparkles, FastForward } from 'lucide-react';
+import { Download, Share2, Instagram, Youtube, Video, AlertCircle, Loader2, Copy, Check, Wand2, Type, Calendar, Languages, FileText, Link2, Scissors, Crosshair, TrendingUp, Shield, Star, Sparkles, FastForward, Camera } from 'lucide-react';
 import { getApiUrl } from '../config';
 import { apiFetch } from '../lib/api';
 import SubtitleModal from './SubtitleModal';
@@ -170,6 +170,37 @@ export default function ResultCard({ clip, index, jobId, durable, uploadPostKey,
         navigator.clipboard.writeText(text);
         setCopiedAll(true);
         setTimeout(() => setCopiedAll(false), 2000);
+    };
+
+    const [capturedFrame, setCapturedFrame] = useState(false);
+
+    const captureFrame = (e) => {
+        if (e) e.stopPropagation();
+        const video = videoRef.current;
+        if (!video) return;
+        try {
+            const canvas = document.createElement('canvas');
+            canvas.width = video.videoWidth || 1080;
+            canvas.height = video.videoHeight || 1920;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            canvas.toBlob((blob) => {
+                if (!blob) return;
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                const cleanJob = (jobId || 'clip').slice(0, 8);
+                a.download = `cover_${cleanJob}_clip_${index + 1}.png`;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                URL.revokeObjectURL(url);
+                setCapturedFrame(true);
+                setTimeout(() => setCapturedFrame(false), 2000);
+            }, 'image/png');
+        } catch (err) {
+            console.error('Frame capture failed:', err);
+        }
     };
 
     const downloadClip = async () => {
@@ -908,8 +939,21 @@ export default function ResultCard({ clip, index, jobId, durable, uploadPostKey,
                     </button>
                 </div>
 
-                {/* Top Right Video Overlay Tools: Speed, Safe Zone & Star */}
+                {/* Top Right Video Overlay Tools: Speed, Cover, Safe Zone & Star */}
                 <div className="absolute top-3 right-3 flex items-center gap-1.5 z-30">
+                    <button
+                        onClick={captureFrame}
+                        title="Tangkap frame video ini sebagai Cover / Thumbnail HD (PNG)"
+                        className={`px-2 py-1 rounded-full text-[10px] font-mono flex items-center gap-1 transition-all backdrop-blur-sm border shadow-sm cursor-pointer ${
+                            capturedFrame
+                                ? 'bg-emerald-500 text-white border-emerald-400 font-bold animate-pulse'
+                                : 'bg-black/60 text-white/70 border-white/20 hover:text-white hover:bg-black/80'
+                        }`}
+                    >
+                        {capturedFrame ? <Check size={10} /> : <Camera size={10} />}
+                        <span>{capturedFrame ? 'Saved!' : 'Cover'}</span>
+                    </button>
+
                     <button
                         onClick={cyclePlaybackSpeed}
                         title={`Kecepatan Putar: ${playbackSpeed}x (Klik untuk ganti 1x / 1.25x / 1.5x / 2x)`}
