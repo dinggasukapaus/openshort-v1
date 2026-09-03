@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Upload, Sparkles, Youtube, Instagram, Share2, ChevronDown, Check, Activity, LayoutDashboard, Settings, Plus, History, X, Terminal, Shield, LayoutGrid, Image, Globe, RotateCcw, Calendar, AlertTriangle, KeyRound, Bot, Users, Smartphone, ExternalLink, Copy, CheckCircle2, Mail, Loader2, Download, Menu, Lock, PanelLeftClose, PanelLeft, Filter, ArrowUpDown } from 'lucide-react';
+import { Upload, Sparkles, Youtube, Instagram, Share2, ChevronDown, Check, Activity, LayoutDashboard, Settings, Plus, History, X, Terminal, Shield, LayoutGrid, Image, Globe, RotateCcw, Calendar, AlertTriangle, KeyRound, Bot, Users, Smartphone, ExternalLink, Copy, CheckCircle2, Mail, Loader2, Download, Menu, Lock, PanelLeftClose, PanelLeft, Filter, ArrowUpDown, Keyboard } from 'lucide-react';
 import KeyInput from './components/KeyInput';
 import MediaInput from './components/MediaInput';
 import McpConnectCard from './components/McpConnectCard';
@@ -10,6 +10,7 @@ import ThumbnailStudio from './components/ThumbnailStudio';
 import SaaShortsTab from './components/SaaShortsTab';
 import UGCGallery from './components/UGCGallery';
 import ScheduleWeekModal from './components/ScheduleWeekModal';
+import KeyboardShortcutsModal from './components/KeyboardShortcutsModal';
 import ClipEditor from './components/ClipEditor';
 import ReframeEditor from './components/ReframeEditor';
 import UsageMeter from './components/UsageMeter';
@@ -225,6 +226,63 @@ function App() {
       return next;
     });
   };
+
+  const [showShortcutsModal, setShowShortcutsModal] = useState(false);
+
+  // Global Keyboard Shortcuts for clippers
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      // Do not intercept if user is typing in input, textarea, or editable element
+      const tag = e.target?.tagName?.toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || e.target?.isContentEditable) return;
+
+      if (e.key === '?' || (e.shiftKey && e.key === '/')) {
+        e.preventDefault();
+        setShowShortcutsModal(prev => !prev);
+        return;
+      }
+
+      if (e.key === 'Escape') {
+        if (showShortcutsModal) {
+          setShowShortcutsModal(false);
+        }
+        return;
+      }
+
+      // Playback shortcuts: find currently playing video or first visible video
+      const videos = Array.from(document.querySelectorAll('video'));
+      const playingVideo = videos.find(v => !v.paused) || videos[0];
+
+      if (e.code === 'Space') {
+        if (playingVideo) {
+          e.preventDefault();
+          if (playingVideo.paused) {
+            playingVideo.play().catch(() => {});
+          } else {
+            playingVideo.pause();
+          }
+        }
+      } else if (e.key === 'ArrowLeft' || e.key === 'j' || e.key === 'J') {
+        if (playingVideo) {
+          e.preventDefault();
+          playingVideo.currentTime = Math.max(0, playingVideo.currentTime - 3);
+        }
+      } else if (e.key === 'ArrowRight' || e.key === 'l' || e.key === 'L') {
+        if (playingVideo) {
+          e.preventDefault();
+          playingVideo.currentTime = Math.min(playingVideo.duration || 9999, playingVideo.currentTime + 3);
+        }
+      } else if (e.key === '0') {
+        if (playingVideo) {
+          e.preventDefault();
+          playingVideo.currentTime = 0;
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [showShortcutsModal]);
 
   const [apiKey, setApiKey] = useState(localStorage.getItem('gemini_key') || '');
   // Social API State - Load encrypted or plain
@@ -1954,6 +2012,15 @@ function App() {
                   {results?.clips?.length > 0 && status === 'complete' && (
                     <div className="flex flex-col sm:flex-row sm:justify-end items-stretch sm:items-center gap-2">
                       <button
+                        onClick={() => setShowShortcutsModal(true)}
+                        className="btn-ghost px-2.5 py-2 text-xs flex items-center gap-1.5"
+                        title="Lihat Keyboard Shortcuts (?)"
+                      >
+                        <Keyboard size={14} />
+                        <span className="hidden sm:inline">shortcuts</span>
+                        <kbd className="hidden md:inline px-1.5 py-0.2 bg-paper3 border border-rule text-[10px] rounded font-mono">?</kbd>
+                      </button>
+                      <button
                         onClick={handleDownloadAll}
                         disabled={downloadingAll}
                         className="btn-ghost px-3 py-2 text-xs"
@@ -2262,6 +2329,11 @@ function App() {
         uploadPostKey={uploadPostKey}
         uploadUserId={uploadUserId}
         isManaged={isManaged}
+      />
+
+      <KeyboardShortcutsModal
+        isOpen={showShortcutsModal}
+        onClose={() => setShowShortcutsModal(false)}
       />
 
       {/* Pre-flight quality gate */}

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Loader2, Shield } from 'lucide-react';
+import { Loader2, Shield, Star, Check } from 'lucide-react';
 import { apiFetch } from '../lib/api';
 import RemotionPreview from './RemotionPreview';
 import Modal from './ui/Modal';
@@ -48,17 +48,21 @@ const POSITION_OPTIONS = [
 // Ready-made caption looks burned server-side as karaoke ASS (word highlight):
 // dimmed base text + strong active word, optional glow/pop/box effect.
 const CAPTION_PRESETS = [
-    { id: 'tiktok',  label: 'TikTok',     style: 'karaoke', effect: 'none', highlightColor: '#FE2C55', baseOpacity: 0.75, uppercase: false, fontName: 'Verdana', borderWidth: 2 },
-    { id: 'reels',   label: 'Reels',      style: 'karaoke', effect: 'none', highlightColor: '#E1306C', baseOpacity: 0.7,  uppercase: false, fontName: 'Verdana', borderWidth: 2 },
-    { id: 'shorts',  label: 'Shorts Pop', style: 'karaoke', effect: 'pop',  highlightColor: '#FF0000', baseOpacity: 0.7,  uppercase: false, fontName: 'Verdana', borderWidth: 2 },
-    { id: 'gold',    label: 'Gold Glow',  style: 'karaoke', effect: 'glow', highlightColor: '#FFD700', baseOpacity: 0.6,  uppercase: false, fontName: 'Verdana', borderWidth: 2 },
-    { id: 'neon',    label: 'Neon',       style: 'karaoke', effect: 'glow', highlightColor: '#00FF88', baseOpacity: 0.55, uppercase: false, fontName: 'Verdana', borderWidth: 2 },
-    { id: 'cyber',   label: 'Cyber',      style: 'karaoke', effect: 'glow', highlightColor: '#00FFFF', baseOpacity: 0.5,  uppercase: false, fontName: 'Verdana', borderWidth: 2 },
-    { id: 'karaoke', label: 'Karaoke',    style: 'karaoke', effect: 'none', highlightColor: '#FF6B6B', baseOpacity: 0.6,  uppercase: false, fontName: 'Verdana', borderWidth: 2 },
-    { id: 'minimal', label: 'Minimal',    style: 'karaoke', effect: 'none', highlightColor: '#FFFFFF', baseOpacity: 0.65, uppercase: false, fontName: 'Verdana', borderWidth: 1 },
-    { id: 'beast',   label: 'Beast',      style: 'karaoke', effect: 'pop',  highlightColor: '#FFD700', baseOpacity: 1.0,  uppercase: true,  fontName: 'Impact',  borderWidth: 3 },
-    { id: 'boxed',   label: 'Boxed',      style: 'karaoke', effect: 'box',  highlightColor: '#7C3AED', baseOpacity: 0.85, uppercase: false, fontName: 'Verdana', borderWidth: 2 },
-    { id: 'classic', label: 'Classic',    style: 'classic', effect: 'none', highlightColor: '#FFD700', baseOpacity: 1.0,  uppercase: false, fontName: 'Verdana', borderWidth: 2 },
+    { id: 'hormozi',     label: 'Hormozi Gold', style: 'karaoke', effect: 'pop',  highlightColor: '#FFDD00', baseOpacity: 1.0, uppercase: true,  fontName: 'Impact',  borderWidth: 4 },
+    { id: 'beast_neon',  label: 'MrBeast Neon', style: 'karaoke', effect: 'pop',  highlightColor: '#00FF66', baseOpacity: 0.9, uppercase: true,  fontName: 'Impact',  borderWidth: 3 },
+    { id: 'storyteller', label: 'Storyteller',  style: 'karaoke', effect: 'glow', highlightColor: '#38BDF8', baseOpacity: 0.65, uppercase: false, fontName: 'Verdana', borderWidth: 2 },
+    { id: 'viral_fire',  label: 'Viral Fire',   style: 'karaoke', effect: 'pop',  highlightColor: '#FF3B30', baseOpacity: 1.0, uppercase: true,  fontName: 'Impact',  borderWidth: 3 },
+    { id: 'tiktok',      label: 'TikTok',       style: 'karaoke', effect: 'none', highlightColor: '#FE2C55', baseOpacity: 0.75, uppercase: false, fontName: 'Verdana', borderWidth: 2 },
+    { id: 'reels',       label: 'Reels',        style: 'karaoke', effect: 'none', highlightColor: '#E1306C', baseOpacity: 0.7,  uppercase: false, fontName: 'Verdana', borderWidth: 2 },
+    { id: 'shorts',      label: 'Shorts Pop',   style: 'karaoke', effect: 'pop',  highlightColor: '#FF0000', baseOpacity: 0.7,  uppercase: false, fontName: 'Verdana', borderWidth: 2 },
+    { id: 'gold',        label: 'Gold Glow',    style: 'karaoke', effect: 'glow', highlightColor: '#FFD700', baseOpacity: 0.6,  uppercase: false, fontName: 'Verdana', borderWidth: 2 },
+    { id: 'neon',        label: 'Neon',         style: 'karaoke', effect: 'glow', highlightColor: '#00FF88', baseOpacity: 0.55, uppercase: false, fontName: 'Verdana', borderWidth: 2 },
+    { id: 'cyber',       label: 'Cyber',        style: 'karaoke', effect: 'glow', highlightColor: '#00FFFF', baseOpacity: 0.5,  uppercase: false, fontName: 'Verdana', borderWidth: 2 },
+    { id: 'karaoke',     label: 'Karaoke',      style: 'karaoke', effect: 'none', highlightColor: '#FF6B6B', baseOpacity: 0.6,  uppercase: false, fontName: 'Verdana', borderWidth: 2 },
+    { id: 'minimal',     label: 'Minimal',      style: 'karaoke', effect: 'none', highlightColor: '#FFFFFF', baseOpacity: 0.65, uppercase: false, fontName: 'Verdana', borderWidth: 1 },
+    { id: 'beast',       label: 'Beast',        style: 'karaoke', effect: 'pop',  highlightColor: '#FFD700', baseOpacity: 1.0,  uppercase: true,  fontName: 'Impact',  borderWidth: 3 },
+    { id: 'boxed',       label: 'Boxed',        style: 'karaoke', effect: 'box',  highlightColor: '#7C3AED', baseOpacity: 0.85, uppercase: false, fontName: 'Verdana', borderWidth: 2 },
+    { id: 'classic',     label: 'Classic',      style: 'classic', effect: 'none', highlightColor: '#FFD700', baseOpacity: 1.0,  uppercase: false, fontName: 'Verdana', borderWidth: 2 },
 ];
 
 const swatchClass = (selected) =>
@@ -86,6 +90,31 @@ export default function SubtitleModal({ isOpen, onClose, onGenerate, onApplyAll,
     const [baseOpacity, setBaseOpacity] = useState(1.0);
     const [uppercase, setUppercase] = useState(false);
     const [activePreset, setActivePreset] = useState(null);
+    const [defaultPresetId, setDefaultPresetId] = useState(() => {
+        try {
+            return localStorage.getItem('openshorts_default_caption_preset') || 'hormozi';
+        } catch {
+            return 'hormozi';
+        }
+    });
+
+    const handleSetAsDefault = () => {
+        if (!activePreset) return;
+        try {
+            localStorage.setItem('openshorts_default_caption_preset', activePreset);
+            setDefaultPresetId(activePreset);
+        } catch {}
+    };
+
+    // Auto-apply default preset when modal opens
+    useEffect(() => {
+        if (!isOpen) return;
+        const savedId = localStorage.getItem('openshorts_default_caption_preset') || 'hormozi';
+        const preset = CAPTION_PRESETS.find(p => p.id === savedId) || CAPTION_PRESETS[0];
+        if (preset) {
+            applyPreset(preset);
+        }
+    }, [isOpen]);
 
     const applyPreset = (p) => {
         setActivePreset(p.id);
@@ -265,20 +294,43 @@ export default function SubtitleModal({ isOpen, onClose, onGenerate, onApplyAll,
                     <div className="space-y-5 flex-1 overflow-y-auto custom-scrollbar pr-1">
                         {/* Caption presets (server-side karaoke burn) */}
                         <div>
-                            <p className="eyebrow mb-2">Preset</p>
+                            <div className="flex items-center justify-between mb-2">
+                                <p className="eyebrow">Preset</p>
+                                {activePreset && (
+                                    <button
+                                        type="button"
+                                        onClick={handleSetAsDefault}
+                                        className="text-[11px] font-medium text-brass hover:underline flex items-center gap-1 cursor-pointer"
+                                        title="Jadikan preset ini bawaan untuk semua klip berikutnya"
+                                    >
+                                        {defaultPresetId === activePreset ? (
+                                            <span className="text-ok flex items-center gap-1 font-semibold">
+                                                <Check size={12} /> Default Aktif
+                                            </span>
+                                        ) : (
+                                            <span className="flex items-center gap-1 text-muted hover:text-brass">
+                                                <Star size={11} /> Set as Default
+                                            </span>
+                                        )}
+                                    </button>
+                                )}
+                            </div>
                             <div className="grid grid-cols-3 gap-1.5">
                                 {CAPTION_PRESETS.map((p) => (
                                     <button
                                         key={p.id}
                                         onClick={() => applyPreset(p)}
-                                        className={`px-2 py-1.5 rounded-input border text-xs transition-colors flex items-center gap-1.5 justify-center
+                                        className={`px-2 py-1.5 rounded-input border text-xs transition-colors flex items-center gap-1.5 justify-center relative
                                             ${activePreset === p.id
-                                                ? 'border-[color:var(--color-accent)] text-ink'
+                                                ? 'border-[color:var(--color-accent)] text-ink bg-paper3/40 font-medium'
                                                 : 'border-rule2 text-muted hover:border-[color:var(--color-accent)]'}`}
-                                        title={p.label}
+                                        title={`${p.label}${defaultPresetId === p.id ? ' (Your Default Style)' : ''}`}
                                     >
                                         <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: p.highlightColor }} />
-                                        {p.label}
+                                        <span className="truncate">{p.label}</span>
+                                        {defaultPresetId === p.id && (
+                                            <span className="absolute -top-1 -right-1 text-[9px] text-amber-400 font-bold">★</span>
+                                        )}
                                     </button>
                                 ))}
                             </div>
