@@ -1,4 +1,5 @@
 import os
+import base64
 import llm_backend
 import re
 import sys
