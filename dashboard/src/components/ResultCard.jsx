@@ -5,6 +5,7 @@ import { apiFetch } from '../lib/api';
 import SubtitleModal from './SubtitleModal';
 import HookModal from './HookModal';
 import TranslateModal from './TranslateModal';
+import ShortsThumbnailModal from './ShortsThumbnailModal';
 import Modal from './ui/Modal';
 import SegmentedControl from './ui/SegmentedControl';
 import WatermarkModal, { watermarkNoticeDismissed } from './WatermarkModal';
@@ -50,6 +51,7 @@ export default function ResultCard({ clip, index, jobId, durable, uploadPostKey,
     const [showModal, setShowModal] = useState(false);
     const [showDescModal, setShowDescModal] = useState(false);
     const [showSubtitleModal, setShowSubtitleModal] = useState(false);
+    const [showThumbnailModal, setShowThumbnailModal] = useState(false);
     const [showWatermarkModal, setShowWatermarkModal] = useState(false);
     const [selectedNiche, setSelectedNiche] = useState('general');
     const { plan } = useAuth();
@@ -990,16 +992,12 @@ export default function ResultCard({ clip, index, jobId, durable, uploadPostKey,
                 {/* Top Right Video Overlay Tools: Speed, Cover, Safe Zone & Star */}
                 <div className="absolute top-3 right-3 flex items-center gap-1.5 z-30">
                     <button
-                        onClick={captureFrame}
-                        title="Tangkap frame video ini sebagai Cover / Thumbnail HD (PNG)"
-                        className={`px-2 py-1 rounded-full text-[10px] font-mono flex items-center gap-1 transition-all backdrop-blur-sm border shadow-sm cursor-pointer ${
-                            capturedFrame
-                                ? 'bg-emerald-500 text-white border-emerald-400 font-bold animate-pulse'
-                                : 'bg-black/60 text-white/70 border-white/20 hover:text-white hover:bg-black/80'
-                        }`}
+                        onClick={() => setShowThumbnailModal(true)}
+                        title="Buka 9:16 Shorts Thumbnail Studio (Template Arch + Logo Channel)"
+                        className="px-2 py-1 rounded-full text-[10px] font-mono flex items-center gap-1 transition-all backdrop-blur-sm border shadow-sm cursor-pointer bg-black/60 text-brass border-brass/40 hover:bg-brass hover:text-black font-bold"
                     >
-                        {capturedFrame ? <Check size={10} /> : <Camera size={10} />}
-                        <span>{capturedFrame ? 'Saved!' : 'Cover'}</span>
+                        <Camera size={10} />
+                        <span>Thumbnail</span>
                     </button>
 
                     <button
@@ -1293,6 +1291,15 @@ export default function ResultCard({ clip, index, jobId, durable, uploadPostKey,
                     </button>
 
                     <button
+                        onClick={() => setShowThumbnailModal(true)}
+                        className={QUIET_BTN}
+                        title="Desain Thumbnail 9:16 Viral dengan Logo & Header Arch"
+                    >
+                        <Camera size={16} className="text-muted group-hover:text-brass transition-colors shrink-0" />
+                        thumbnail
+                    </button>
+
+                    <button
                         onClick={() => setShowTranslateModal(true)}
                         disabled={isTranslating}
                         className={QUIET_BTN}
@@ -1527,6 +1534,17 @@ export default function ResultCard({ clip, index, jobId, durable, uploadPostKey,
                 isProcessing={isTranslating}
                 videoUrl={currentVideoUrl}
                 hasApiKey={!!elevenLabsKey}
+            />
+
+            <ShortsThumbnailModal
+                isOpen={showThumbnailModal}
+                onClose={() => setShowThumbnailModal(false)}
+                videoUrl={currentVideoUrl || originalVideoUrl}
+                initialTitle={customTitle || clip.video_title_for_youtube_short}
+                initialHook={customHook || clip.viral_hook_text || clip.video_description_for_tiktok}
+                nicheLabel={NICHE_PRESETS.find(n => n.id === selectedNiche)?.label || 'Trending'}
+                jobId={jobId}
+                clipIndex={index}
             />
 
             {showWatermarkModal && (
