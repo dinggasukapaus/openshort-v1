@@ -4532,8 +4532,8 @@ async def add_thumbnail_intro(req: ThumbnailIntroRequest, request: Request):
     if sfx_path and os.path.exists(sfx_path):
         vol = max(0.05, min(1.0, float(req.sfx_volume or 0.35)))
         filter_str = (
-            f"[1:v]fade=t=out:st={fade_start:.2f}:d={fade_duration:.2f}:alpha=1[intro];"
-            f"[0:v][intro]overlay=0:0:shortest=1[vout];"
+            f"[1:v]scale=1080:1920,setsar=1,fade=t=out:st={fade_start:.2f}:d={fade_duration:.2f}:alpha=1[intro];"
+            f"[0:v][intro]overlay=0:0:eof_action=pass[vout];"
             f"[2:a]volume={vol:.2f}[sfx];"
             f"[0:a][sfx]amix=inputs=2:duration=first:dropout_transition=0[aout]"
         )
@@ -4545,14 +4545,14 @@ async def add_thumbnail_intro(req: ThumbnailIntroRequest, request: Request):
             "-filter_complex", filter_str,
             "-map", "[vout]",
             "-map", "[aout]",
-            "-c:v", "libx264", "-preset", "fast", "-crf", "18",
+            "-c:v", "libx264", "-pix_fmt", "yuv420p", "-preset", "fast", "-crf", "18",
             "-c:a", "aac", "-b:a", "192k",
             output_path
         ]
     else:
         filter_str = (
-            f"[1:v]fade=t=out:st={fade_start:.2f}:d={fade_duration:.2f}:alpha=1[intro];"
-            f"[0:v][intro]overlay=0:0:shortest=1[vout]"
+            f"[1:v]scale=1080:1920,setsar=1,fade=t=out:st={fade_start:.2f}:d={fade_duration:.2f}:alpha=1[intro];"
+            f"[0:v][intro]overlay=0:0:eof_action=pass[vout]"
         )
         cmd = [
             ffmpeg_bin, "-y",
@@ -4561,7 +4561,7 @@ async def add_thumbnail_intro(req: ThumbnailIntroRequest, request: Request):
             "-filter_complex", filter_str,
             "-map", "[vout]",
             "-map", "0:a?",
-            "-c:v", "libx264", "-preset", "fast", "-crf", "18",
+            "-c:v", "libx264", "-pix_fmt", "yuv420p", "-preset", "fast", "-crf", "18",
             "-c:a", "copy",
             output_path
         ]
