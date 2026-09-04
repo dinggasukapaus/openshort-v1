@@ -1545,6 +1545,19 @@ export default function ResultCard({ clip, index, jobId, durable, uploadPostKey,
                 nicheLabel={NICHE_PRESETS.find(n => n.id === selectedNiche)?.label || 'Trending'}
                 jobId={jobId}
                 clipIndex={index}
+                inputFilename={serverVideoFile}
+                onIntroApplied={(newUrl) => {
+                    const serverUrl = getApiUrl(newUrl);
+                    setCurrentVideoUrl(serverUrl);
+                    const newServerFile = newUrl.split('/').pop();
+                    setServerVideoFile(newServerFile);
+                    if (videoRef.current) {
+                        videoRef.current.load();
+                    }
+                    if (onStateChange) {
+                        onStateChange(index, { activeLayers, serverVideoFile: newServerFile });
+                    }
+                }}
             />
 
             {showWatermarkModal && (

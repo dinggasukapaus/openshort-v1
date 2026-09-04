@@ -12,6 +12,25 @@ audio codecs, filters) stay at each call site.
 import os
 import subprocess
 import threading
+import shutil
+
+_WINGET_FFMPEG = r"C:\Users\dingg\AppData\Local\Microsoft\WinGet\Packages\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\ffmpeg-9.0.1-full_build\bin\ffmpeg.exe"
+
+def get_ffmpeg_bin():
+    """Return the absolute path to ffmpeg binary, resolving winget or system PATH."""
+    found = shutil.which("ffmpeg")
+    if found:
+        return found
+    if os.path.exists(_WINGET_FFMPEG):
+        return _WINGET_FFMPEG
+    return "ffmpeg"
+
+# Ensure ffmpeg directory is in PATH
+_ffmpeg_path = get_ffmpeg_bin()
+if os.path.isabs(_ffmpeg_path):
+    _dir = os.path.dirname(_ffmpeg_path)
+    if _dir not in os.environ.get("PATH", ""):
+        os.environ["PATH"] = _dir + os.pathsep + os.environ.get("PATH", "")
 
 # Quality tiers pinning the historical libx264 settings.
 QUALITY = "quality"            # was: -preset medium -crf 18

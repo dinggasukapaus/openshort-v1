@@ -1,4 +1,4 @@
-﻿# 📖 Panduan Lengkap OpenShorts (Clipper Pro Edition)
+# 📖 Panduan Lengkap OpenShorts (Clipper Pro Edition)
 
 Dokumentasi resmi ini memuat **daftar detail fitur**, **panduan cara penggunaan**, **kebutuhan sistem (prerequisites)**, serta **langkah instalasi lokal lengkap** untuk OpenShorts yang telah dioptimasi khusus untuk alur kerja (*workflow*) kreator konten dan *video clipper*.
 
@@ -244,6 +244,39 @@ Tekan tombol **`?`** kapan saja di dalam dashboard untuk membuka jendela panduan
 ### Q4: Di mana file video dan metadata tersimpan di laptop?
 > **Solusi:** Seluruh klip video, file audio wav, transkrip JSON, dan arsip ZIP disimpan secara rapi di dalam direktori:  
 > `C:\laragon\www\openshorts-main\output\{job_id}\`
+
+---
+
+## 7. Fitur Unggulan: Studio Thumbnail 9:16 & Video Intro Burner Pro
+
+Setiap klip video vertikal (YouTube Shorts, TikTok, Instagram Reels) kini dilengkapi dengan **Thumbnail Studio Interaktif** yang dapat langsung dibakar menjadi **Intro Video 2.5 Detik**:
+
+### ✨ Karakteristik Thumbnail Viral:
+1. **Desain Melengkung (Arch / Wave / Slant):**
+   - Header atas bertema warna viral (*Facebook Blue #1877F2, Viral Red, Hormozi Gold, Cyber Purple, Emerald, Slate*).
+   - Bentuk melengkung (*Arch Cutout*) otomatis membingkai wajah pembicara di tengah.
+2. **Search Pill Badge:**
+   - Menampilkan badge pencarian modern `[ 🔍 Topik / Kata Kunci ]` lengkap dengan tombol silang atau logo channel Anda.
+3. **Upload Logo Channel:**
+   - Unggah file logo PNG/JPG channel Anda sekali saja; tersimpan otomatis di browser (*localStorage*) dan dapat diposisikan di Search Pill, Sudut Kanan Atas, atau Kartu Pengumuman.
+4. **Headline & Announcement Card:**
+   - Judul hook tebal dengan slider ukuran font (32px - 80px).
+   - Kartu pengumuman bawah (*ANNOUNCEMENTS*) putih kontras untuk menegaskan inti pesan klip.
+
+### 🎬 Pembakar Video Intro (2.5 Detik Otomatis):
+Klik tombol **`🎬 Pasang Sebagai Intro Video (2.5s + SFX)`**:
+- Menggabungkan thumbnail sebagai cover pembuka selama 2.5 detik dengan transisi memudar halus (*smooth dissolve fade-out 0.5s*) langsung ke video pembicara.
+- Menjadi **auto-cover instan** di feed YouTube Shorts & TikTok tanpa perlu upload manual.
+
+### 🔊 Audio Sound Effect (SFX) 100% Bebas Hak Cipta (*No Copyright*):
+Tersedia 5 preset suara synthesized PCM murni yang dibuat khusus tanpa risiko klaim Content ID:
+- 🔔 **iPhone / Chime:** Denting notifikasi smartphone yang menghentikan *doom-scrolling*.
+- 💨 **Fast Whoosh:** Hembusan angin modern khas transisi video viral.
+- 💥 **Cinematic Boom:** Dentuman bass mewah berkelas.
+- 📸 **Camera Click:** Jepretan kamera dua ketukan yang renyah.
+- 🎈 **Bubble Pop:** Letupan gelembung santai.
+- 🎚️ **Slider Volume SFX:** Pengaturan volume proporsional (default 35%) sehingga suara asli pembicara tetap jernih dan tidak tertutup.
+- 🎵 **Custom SFX:** Pilihan upload efek suara favorit Anda sendiri.
 
 ---
 *OpenShorts Clipper Pro Edition — Dokumentasi Resmi 2026*

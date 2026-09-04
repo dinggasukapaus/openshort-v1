@@ -4440,6 +4440,166 @@ async def add_hook(req: HookRequest, request: Request):
         "burned_hook": None if req.remove else clip_data['auto_hook'],
     }
 
+
+class ThumbnailIntroRequest(BaseModel):
+    job_id: str
+    clip_index: int
+    thumbnail_image: str
+    duration_seconds: float = 2.5
+    sfx_id: str = "chime"
+    sfx_volume: float = 0.35
+    custom_sfx_base64: Optional[str] = None
+    input_filename: Optional[str] = None
+
+
+@app.post("/api/thumbnail-intro")
+async def add_thumbnail_intro(req: ThumbnailIntroRequest, request: Request):
+    """Burn a 9:16 viral thumbnail intro with smooth fade-out and optional copyright-free SFX."""
+    await require_managed_entitlement(request)
+    await _ensure_job_files(req.job_id, request)
+    if req.job_id not in jobs:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    job = jobs[req.job_id]
+    await _assert_job_owner(request, job)
+    output_dir = os.path.join(OUTPUT_DIR, req.job_id)
+    json_files = glob.glob(os.path.join(output_dir, "*_metadata.json"))
+    if not json_files:
+        raise HTTPException(status_code=404, detail="Metadata not found")
+
+    with open(json_files[0], 'r', encoding='utf-8') as f:
+        data = json.load(f)
+
+    clips = data.get('shorts', [])
+    if req.clip_index >= len(clips):
+        raise HTTPException(status_code=404, detail="Clip not found")
+
+    clip_data = clips[req.clip_index]
+
+    if req.input_filename:
+        filename = os.path.basename(req.input_filename)
+    else:
+        filename = clip_data.get('video_url', '').split('/')[-1]
+        if not filename:
+            base_name = os.path.basename(json_files[0]).replace('_metadata.json', '')
+            filename = f"{base_name}_clip_{req.clip_index+1}.mp4"
+
+    input_path = os.path.join(output_dir, filename)
+    if not os.path.exists(input_path):
+        raise HTTPException(status_code=404, detail=f"Video file not found: {input_path}")
+
+    # Decode thumbnail image from base64
+    try:
+        header, encoded = req.thumbnail_image.split(",", 1) if "," in req.thumbnail_image else ("", req.thumbnail_image)
+        img_bytes = base64.b64decode(encoded)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid thumbnail image base64: {e}")
+
+    temp_thumb_path = os.path.join(output_dir, f"temp_thumb_{int(time.time()*1000)}.png")
+    with open(temp_thumb_path, "wb") as f:
+        f.write(img_bytes)
+
+    # Resolve SFX file
+    temp_sfx_path = None
+    sfx_path = None
+    if req.custom_sfx_base64:
+        try:
+            _, sfx_enc = req.custom_sfx_base64.split(",", 1) if "," in req.custom_sfx_base64 else ("", req.custom_sfx_base64)
+            sfx_bytes = base64.b64decode(sfx_enc)
+            temp_sfx_path = os.path.join(output_dir, f"temp_sfx_{int(time.time()*1000)}.wav")
+            with open(temp_sfx_path, "wb") as f:
+                f.write(sfx_bytes)
+            sfx_path = temp_sfx_path
+        except Exception:
+            pass
+    elif req.sfx_id and req.sfx_id != "none":
+        candidate = os.path.join("assets", "sfx", f"{req.sfx_id}.wav")
+        if os.path.exists(candidate):
+            sfx_path = candidate
+
+    output_filename = f"intro_{int(time.time())}_{filename}"
+    output_path = os.path.join(output_dir, output_filename)
+
+    from ffmpeg_utils import get_ffmpeg_bin
+    ffmpeg_bin = get_ffmpeg_bin()
+
+    duration = max(1.0, float(req.duration_seconds or 2.5))
+    fade_duration = 0.5
+    fade_start = max(0.1, duration - fade_duration)
+
+    # Build FFmpeg command
+    if sfx_path and os.path.exists(sfx_path):
+        vol = max(0.05, min(1.0, float(req.sfx_volume or 0.35)))
+        filter_str = (
+            f"[1:v]fade=t=out:st={fade_start:.2f}:d={fade_duration:.2f}:alpha=1[intro];"
+            f"[0:v][intro]overlay=0:0:shortest=1[vout];"
+            f"[2:a]volume={vol:.2f}[sfx];"
+            f"[0:a][sfx]amix=inputs=2:duration=first:dropout_transition=0[aout]"
+        )
+        cmd = [
+            ffmpeg_bin, "-y",
+            "-i", input_path,
+            "-loop", "1", "-t", str(duration), "-i", temp_thumb_path,
+            "-i", sfx_path,
+            "-filter_complex", filter_str,
+            "-map", "[vout]",
+            "-map", "[aout]",
+            "-c:v", "libx264", "-preset", "fast", "-crf", "18",
+            "-c:a", "aac", "-b:a", "192k",
+            output_path
+        ]
+    else:
+        filter_str = (
+            f"[1:v]fade=t=out:st={fade_start:.2f}:d={fade_duration:.2f}:alpha=1[intro];"
+            f"[0:v][intro]overlay=0:0:shortest=1[vout]"
+        )
+        cmd = [
+            ffmpeg_bin, "-y",
+            "-i", input_path,
+            "-loop", "1", "-t", str(duration), "-i", temp_thumb_path,
+            "-filter_complex", filter_str,
+            "-map", "[vout]",
+            "-map", "0:a?",
+            "-c:v", "libx264", "-preset", "fast", "-crf", "18",
+            "-c:a", "copy",
+            output_path
+        ]
+
+    try:
+        subprocess.run(cmd, capture_output=True, text=True, check=True)
+    except subprocess.CalledProcessError as e:
+        print(f"❌ Thumbnail intro burn error: {e.stderr}")
+        raise HTTPException(status_code=500, detail=f"FFmpeg error: {e.stderr[-300:]}")
+    finally:
+        if os.path.exists(temp_thumb_path):
+            try: os.remove(temp_thumb_path)
+            except Exception: pass
+        if temp_sfx_path and os.path.exists(temp_sfx_path):
+            try: os.remove(temp_sfx_path)
+            except Exception: pass
+
+    # Update in-memory and disk records
+    new_video_url = f"/videos/{req.job_id}/{output_filename}"
+    if req.clip_index < len(job['result']['clips']):
+        job['result']['clips'][req.clip_index]['video_url'] = new_video_url
+
+    try:
+        if req.clip_index < len(clips):
+            clips[req.clip_index]['video_url'] = new_video_url
+            data['shorts'] = clips
+            with open(json_files[0], 'w', encoding='utf-8') as f:
+                json.dump(data, f, indent=4)
+    except Exception as e:
+        print(f"⚠️ Failed to update metadata.json with intro: {e}")
+
+    _archive_clip_edit_bg(req.job_id, req.clip_index, output_filename)
+
+    return {
+        "success": True,
+        "new_video_url": new_video_url,
+    }
+
+
 class TranslateRequest(BaseModel):
     job_id: str
     clip_index: int

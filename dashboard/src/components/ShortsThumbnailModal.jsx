@@ -1,6 +1,7 @@
-﻿import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Modal from './ui/Modal';
-import { Download, Sparkles, Image, RefreshCw, X, Upload, Check, Type, Eye, Trash2, Search, Sliders } from 'lucide-react';
+import { Download, Sparkles, Image, RefreshCw, X, Upload, Check, Type, Eye, Trash2, Search, Sliders, Volume2, Play, VolumeX, AlertCircle, Loader2, Music, Clapperboard } from 'lucide-react';
+import { apiFetch } from '../lib/api';
 
 const COLOR_PRESETS = [
   { id: 'meta-blue', name: 'Facebook Blue', color: '#1877F2', text: '#FFFFFF', pillBg: '#FFFFFF', pillText: '#1877F2' },
@@ -9,6 +10,15 @@ const COLOR_PRESETS = [
   { id: 'emerald-green', name: 'Finance Emerald', color: '#059669', text: '#FFFFFF', pillBg: '#FFFFFF', pillText: '#059669' },
   { id: 'cyber-purple', name: 'Cyber Purple', color: '#7C3AED', text: '#FFFFFF', pillBg: '#FFFFFF', pillText: '#7C3AED' },
   { id: 'dark-slate', name: 'Dark Slate', color: '#18181B', text: '#FFFFFF', pillBg: '#27272A', pillText: '#F4F4F5' },
+];
+
+const SFX_PRESETS = [
+  { id: 'chime', name: 'iPhone / Chime', icon: '🔔', desc: 'Denting notifikasi smartphone (paling viral menghentikan scroll)' },
+  { id: 'whoosh', name: 'Fast Whoosh', icon: '💨', desc: 'Hembusan angin cepat modern ala TikTok/Reels' },
+  { id: 'boom', name: 'Cinematic Boom', icon: '💥', desc: 'Dentuman bass elegan berkelas' },
+  { id: 'camera', name: 'Camera Click', icon: '📸', desc: 'Klik jepretan kamera dua ketukan' },
+  { id: 'pop', name: 'Bubble Pop', icon: '🎈', desc: 'Letupan gelembung renyah dan santai' },
+  { id: 'none', name: 'Tanpa SFX', icon: '🔇', desc: 'Hanya audio suara pembicara asli' },
 ];
 
 export default function ShortsThumbnailModal({
@@ -20,6 +30,8 @@ export default function ShortsThumbnailModal({
   nicheLabel = 'Trending',
   jobId = '',
   clipIndex = 0,
+  onIntroApplied = null,
+  inputFilename = null,
 }) {
   if (!isOpen) return null;
 
@@ -47,6 +59,17 @@ export default function ShortsThumbnailModal({
   });
   const [logoPlacement, setLogoPlacement] = useState('pill'); // 'pill', 'corner', 'card', 'none'
   const fileInputRef = useRef(null);
+
+  // Audio SFX Overlay State
+  const [selectedSfx, setSelectedSfx] = useState('chime');
+  const [sfxVolume, setSfxVolume] = useState(35);
+  const [customSfx, setCustomSfx] = useState(null);
+  const sfxInputRef = useRef(null);
+
+  // Burn Video Intro State
+  const [isBurningIntro, setIsBurningIntro] = useState(false);
+  const [introBurnSuccess, setIntroBurnSuccess] = useState(false);
+  const [burnError, setBurnError] = useState(null);
 
   // Video Frame Scrubbing
   const videoRef = useRef(null);
@@ -78,6 +101,22 @@ export default function ShortsThumbnailModal({
     try {
       localStorage.removeItem('openshorts_channel_logo');
     } catch {}
+  };
+
+  // Play preview sound
+  const playSfxPreview = (sfxId) => {
+    if (sfxId === 'none') return;
+    try {
+      let audioUrl = `/sfx/${sfxId}.wav`;
+      if (customSfx && sfxId === 'custom') {
+        audioUrl = customSfx;
+      }
+      const audio = new Audio(audioUrl);
+      audio.volume = Math.min(1.0, Math.max(0.05, sfxVolume / 100));
+      audio.play().catch(e => console.log('Audio preview error:', e));
+    } catch (e) {
+      console.warn('Audio playback not supported:', e);
+    }
   };
 
   // Video metadata loaded
@@ -130,7 +169,6 @@ export default function ShortsThumbnailModal({
 
     // 1. Draw full video frame as background
     try {
-      // Cover fit
       const vw = video.videoWidth || W;
       const vh = video.videoHeight || H;
       const hRatio = W / vw;
@@ -152,8 +190,6 @@ export default function ShortsThumbnailModal({
     ctx.lineTo(W, 0);
 
     if (curveStyle === 'arch') {
-      // Reference curve from screenshot:
-      // Right side cuts higher, left side curves down and embraces the speaker
       ctx.lineTo(W, 580);
       ctx.bezierCurveTo(W * 0.7, 560, W * 0.35, 620, 0, 840);
     } else if (curveStyle === 'wave') {
@@ -215,7 +251,6 @@ export default function ShortsThumbnailModal({
         ctx.restore();
       }
     } else {
-      // Default dark circle with 'X' as in reference screenshot
       ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
       ctx.beginPath();
       ctx.arc(circleBtnX + circleBtnR, circleBtnY + circleBtnR, circleBtnR, 0, Math.PI * 2);
@@ -253,7 +288,6 @@ export default function ShortsThumbnailModal({
     const lineSpacing = headlineSize * 1.22;
 
     for (const line of headlineLines) {
-      // Subtle shadow for legibility
       ctx.shadowColor = 'rgba(0, 0, 0, 0.25)';
       ctx.shadowBlur = 8;
       ctx.shadowOffsetY = 4;
@@ -271,24 +305,20 @@ export default function ShortsThumbnailModal({
       const cardH = 540;
       const radius = 16;
 
-      // Card drop shadow
       ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';
       ctx.shadowBlur = 24;
       ctx.shadowOffsetY = 12;
 
-      // White Card Body
       ctx.fillStyle = '#FFFFFF';
       ctx.beginPath();
       ctx.roundRect(cardX, cardY, cardW, cardH, radius);
       ctx.fill();
       ctx.shadowColor = 'transparent';
 
-      // Eyebrow Label (ANNOUNCEMENTS)
       ctx.fillStyle = '#111827';
       ctx.font = '800 24px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
       ctx.fillText((cardEyebrow || 'ANNOUNCEMENTS').toUpperCase(), cardX + 44, cardY + 60);
 
-      // Card Content Text (Bold Blue or Dark text)
       ctx.fillStyle = selectedColor.color === '#FFFFFF' ? '#1877F2' : selectedColor.color;
       ctx.font = '800 46px -apple-system, BlinkMacSystemFont, "Montserrat", "Segoe UI", sans-serif';
       ctx.textBaseline = 'top';
@@ -300,7 +330,6 @@ export default function ShortsThumbnailModal({
         textY += 62;
       }
 
-      // Logo inside card if chosen
       if (channelLogo && logoPlacement === 'card') {
         const logoImg = new window.Image();
         logoImg.src = channelLogo;
@@ -339,16 +368,61 @@ export default function ShortsThumbnailModal({
     }
   };
 
+  // Burn thumbnail as 2.5s video intro with audio SFX
+  const handleBurnIntro = async () => {
+    const canvas = canvasRef.current;
+    if (!canvas || !jobId) return;
+
+    setIsBurningIntro(true);
+    setBurnError(null);
+    setIntroBurnSuccess(false);
+
+    try {
+      const dataUrl = canvas.toDataURL('image/png');
+      const res = await apiFetch('/api/thumbnail-intro', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          job_id: jobId,
+          clip_index: clipIndex,
+          thumbnail_image: dataUrl,
+          duration_seconds: 2.5,
+          sfx_id: selectedSfx,
+          sfx_volume: sfxVolume / 100,
+          custom_sfx_base64: customSfx,
+          input_filename: inputFilename,
+        }),
+      });
+
+      if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(errText || 'Gagal memproses intro video');
+      }
+
+      const data = await res.json();
+      setIntroBurnSuccess(true);
+      if (onIntroApplied && data.new_video_url) {
+        onIntroApplied(data.new_video_url);
+      }
+      setTimeout(() => setIntroBurnSuccess(false), 5000);
+    } catch (err) {
+      console.error('Burn intro error:', err);
+      setBurnError(err.message || 'Gagal membakar intro video');
+    } finally {
+      setIsBurningIntro(false);
+    }
+  };
+
   return (
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      eyebrow="THUMBNAIL STUDIO PRO"
-      title="9:16 Viral Shorts Thumbnail"
+      eyebrow="THUMBNAIL STUDIO & VIDEO INTRO PRO"
+      title="9:16 Viral Thumbnail & Video Intro"
       size="xl"
     >
       <div className="flex flex-col lg:flex-row gap-6 items-start">
-        {/* Left Side: Live 9:16 Canvas Preview */}
+        {/* Left Side: Live 9:16 Canvas Preview & Actions */}
         <div className="w-full lg:w-[380px] shrink-0 flex flex-col items-center">
           <div className="relative w-full aspect-[9/16] bg-black/90 rounded-card overflow-hidden border-2 border-rule shadow-2xl flex items-center justify-center">
             <canvas
@@ -392,19 +466,107 @@ export default function ShortsThumbnailModal({
             />
           </div>
 
-          {/* Download Action */}
+          {/* Notification Messages */}
+          {introBurnSuccess && (
+            <div className="w-full mt-2.5 p-2.5 rounded-input bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs flex items-center gap-2 font-medium animate-fade">
+              <Check size={16} className="shrink-0 text-emerald-400" />
+              <span>Intro Video & SFX Berhasil Dipasang ke Klip!</span>
+            </div>
+          )}
+
+          {burnError && (
+            <div className="w-full mt-2.5 p-2.5 rounded-input bg-red-500/20 border border-red-500/40 text-red-300 text-xs flex items-center gap-2 font-medium animate-fade">
+              <AlertCircle size={16} className="shrink-0 text-red-400" />
+              <span className="truncate">{burnError}</span>
+            </div>
+          )}
+
+          {/* Primary Action 1: Burn as Video Intro */}
+          <button
+            onClick={handleBurnIntro}
+            disabled={isBurningIntro}
+            className="btn-primary w-full py-3 mt-3 text-xs flex items-center justify-center gap-2 font-bold shadow-lg cursor-pointer"
+            title="Bakar thumbnail ini ke 2.5 detik pertama video klip lengkap dengan SFX"
+          >
+            {isBurningIntro ? (
+              <>
+                <Loader2 size={16} className="animate-spin" />
+                <span>Membakar Intro Video & SFX…</span>
+              </>
+            ) : (
+              <>
+                <Clapperboard size={16} />
+                <span>🎬 Pasang Sebagai Intro Video (2.5s + SFX)</span>
+              </>
+            )}
+          </button>
+
+          {/* Secondary Action 2: Download Standalone PNG */}
           <button
             onClick={handleDownload}
-            disabled={isGenerating}
-            className="btn-primary w-full py-3 mt-3 text-sm flex items-center justify-center gap-2 font-bold shadow-lg cursor-pointer"
+            disabled={isGenerating || isBurningIntro}
+            className="btn-quiet w-full py-2 mt-2 text-xs flex items-center justify-center gap-1.5 cursor-pointer font-medium"
+            title="Unduh file gambar cover PNG terpisah untuk upload manual"
           >
-            <Download size={18} />
-            <span>{isGenerating ? 'Membuat HD PNG…' : 'Download HD Thumbnail (1080x1920)'}</span>
+            <Download size={14} />
+            <span>Download Gambar Cover (PNG 1080x1920)</span>
           </button>
         </div>
 
         {/* Right Side: Customization Controls */}
         <div className="flex-1 w-full space-y-5 overflow-y-auto max-h-[75vh] custom-scrollbar pr-1">
+          {/* Copyright-Free Audio SFX Overlay */}
+          <div className="p-3.5 bg-paper2 rounded-card border border-brass/30 space-y-2.5">
+            <div className="flex items-center justify-between">
+              <label className="eyebrow text-brass flex items-center gap-1.5">
+                <Music size={13} /> AUDIO SFX INTRO (100% BEBAS COPYRIGHT)
+              </label>
+              <div className="flex items-center gap-2 text-xs text-muted">
+                <span>Volume:</span>
+                <input
+                  type="range"
+                  min="10"
+                  max="80"
+                  value={sfxVolume}
+                  onChange={(e) => setSfxVolume(parseInt(e.target.value))}
+                  className="w-16 accent-brass"
+                />
+                <span className="font-mono text-brass">{sfxVolume}%</span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {SFX_PRESETS.map((sfx) => (
+                <div
+                  key={sfx.id}
+                  onClick={() => { setSelectedSfx(sfx.id); playSfxPreview(sfx.id); }}
+                  className={`p-2 rounded-input border text-xs cursor-pointer transition-all flex flex-col justify-between ${
+                    selectedSfx === sfx.id
+                      ? 'border-brass bg-paper3 shadow-xs'
+                      : 'border-rule hover:border-muted bg-paper'
+                  }`}
+                  title={sfx.desc}
+                >
+                  <div className="flex items-center justify-between gap-1 mb-1">
+                    <span className="text-base">{sfx.icon}</span>
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); playSfxPreview(sfx.id); }}
+                      className="p-1 text-muted hover:text-brass transition-colors"
+                      title="Dengar Suara"
+                    >
+                      <Play size={11} />
+                    </button>
+                  </div>
+                  <span className="font-medium text-[11px] truncate">{sfx.name}</span>
+                </div>
+              ))}
+            </div>
+            <p className="text-[10px] text-muted">
+              SFX matematika murni & public domain yang berbunyi di detik ke-0 tanpa memotong suara narator.
+            </p>
+          </div>
+
           {/* Preset Color Themes */}
           <div>
             <label className="eyebrow block mb-2">🎨 WARNA TEMA HEADER</label>
@@ -489,7 +651,7 @@ export default function ShortsThumbnailModal({
                   <Upload size={13} />
                   <span>{channelLogo ? 'Ganti Logo' : 'Upload Logo Channel (PNG/JPG)'}</span>
                 </button>
-                <p className="text-[10px] text-muted mt-1">Logo tersimpan otomatis untuk seluruh klip berikutnya.</p>
+                <p className="text-[10px] text-muted mt-1">Logo tersimpan permanen untuk seluruh klip berikutnya.</p>
               </div>
             </div>
 
