@@ -4485,7 +4485,15 @@ async def add_thumbnail_intro(req: ThumbnailIntroRequest, request: Request):
             base_name = os.path.basename(json_files[0]).replace('_metadata.json', '')
             filename = f"{base_name}_clip_{req.clip_index+1}.mp4"
 
-    input_path = os.path.join(output_dir, filename)
+    # Ensure we never burn on top of an existing intro_ file; revert to the clean pre-intro file if present
+    clean_filename = re.sub(r'^intro_\d+_', '', filename)
+    clean_path = os.path.join(output_dir, clean_filename)
+    if os.path.exists(clean_path):
+        filename = clean_filename
+        input_path = clean_path
+    else:
+        input_path = os.path.join(output_dir, filename)
+
     if not os.path.exists(input_path):
         raise HTTPException(status_code=404, detail=f"Video file not found: {input_path}")
 

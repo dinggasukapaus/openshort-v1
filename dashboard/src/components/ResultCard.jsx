@@ -62,7 +62,7 @@ export default function ResultCard({ clip, index, jobId, durable, uploadPostKey,
     // subtitled file (double-subtitle bug).
     const stripBurns = (filename) => {
         let f = filename || '', prev;
-        do { prev = f; f = f.replace(/^subtitled_\d+_/, '').replace(/^hooked_\d+_/, '').replace(/^hook_/, ''); } while (f !== prev);
+        do { prev = f; f = f.replace(/^subtitled_\d+_/, '').replace(/^hooked_\d+_/, '').replace(/^hook_/, '').replace(/^intro_\d+_/, ''); } while (f !== prev);
         return f;
     };
     const originalVideoUrl = getApiUrl((clip.video_url || '').replace(/[^/]+$/, stripBurns((clip.video_url || '').split('/').pop())));
@@ -298,6 +298,17 @@ export default function ResultCard({ clip, index, jobId, durable, uploadPostKey,
     // (subtitles, hooks, effects) never get silently dropped.
     // A reopened project seeds it from the persisted project state.
     const [serverVideoFile, setServerVideoFile] = useState(initialState?.server_file || (clip.video_url || '').split('/').pop());
+    // Strip intro and hook burns so thumbnail canvas and intro burner always use the clean video base (preserving subtitles if any)
+    const stripIntroAndHook = (filename) => {
+        let f = filename || '', prev;
+        do {
+            prev = f;
+            f = f.replace(/^intro_\d+_/, '').replace(/^hooked_\d+_/, '').replace(/^hook_/, '');
+        } while (f !== prev);
+        return f;
+    };
+    const cleanThumbFile = stripIntroAndHook(serverVideoFile);
+    const cleanThumbVideoUrl = getApiUrl((clip.video_url || '').replace(/[^/]+$/, cleanThumbFile));
     const [videoErrored, setVideoErrored] = useState(false);
     const [resolution, setResolution] = useState(null);
 
@@ -1282,21 +1293,12 @@ export default function ResultCard({ clip, index, jobId, durable, uploadPostKey,
                     </button>
 
                     <button
-                        onClick={() => setShowHookModal(true)}
-                        disabled={isHooking}
-                        className={QUIET_BTN}
-                    >
-                        {isHooking ? <Loader2 size={16} className="animate-spin text-brass shrink-0" /> : <Wand2 size={16} className="text-muted group-hover:text-brass transition-colors shrink-0" />}
-                        {isHooking ? 'adding…' : 'viral hook'}
-                    </button>
-
-                    <button
                         onClick={() => setShowThumbnailModal(true)}
                         className={QUIET_BTN}
-                        title="Desain Thumbnail 9:16 Viral dengan Logo & Header Arch"
+                        title="Studio Thumbnail & Video Intro 9:16 Viral (Auto-Cover & SFX)"
                     >
                         <Camera size={16} className="text-muted group-hover:text-brass transition-colors shrink-0" />
-                        thumbnail
+                        thumbnail & intro
                     </button>
 
                     <button
@@ -1539,13 +1541,13 @@ export default function ResultCard({ clip, index, jobId, durable, uploadPostKey,
             <ShortsThumbnailModal
                 isOpen={showThumbnailModal}
                 onClose={() => setShowThumbnailModal(false)}
-                videoUrl={currentVideoUrl || originalVideoUrl}
+                videoUrl={cleanThumbVideoUrl || originalVideoUrl}
                 initialTitle={customTitle || clip.video_title_for_youtube_short}
                 initialHook={customHook || clip.viral_hook_text || clip.video_description_for_tiktok}
                 nicheLabel={NICHE_PRESETS.find(n => n.id === selectedNiche)?.label || 'Trending'}
                 jobId={jobId}
                 clipIndex={index}
-                inputFilename={serverVideoFile}
+                inputFilename={cleanThumbFile}
                 onIntroApplied={(newUrl) => {
                     const serverUrl = getApiUrl(newUrl);
                     setCurrentVideoUrl(serverUrl);

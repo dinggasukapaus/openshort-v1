@@ -128,6 +128,13 @@ export default function ShortsThumbnailModal({
     }
   };
 
+  // Reload video if videoUrl changes
+  useEffect(() => {
+    if (videoRef.current && videoUrl) {
+      videoRef.current.load();
+    }
+  }, [videoUrl]);
+
   // Redraw canvas whenever settings change
   useEffect(() => {
     if (videoLoaded) {
@@ -437,6 +444,8 @@ export default function ShortsThumbnailModal({
             src={videoUrl}
             crossOrigin="anonymous"
             onLoadedMetadata={handleLoadedMetadata}
+            onLoadedData={() => { setVideoLoaded(true); drawCanvas(); }}
+            onCanPlay={() => { setVideoLoaded(true); drawCanvas(); }}
             onSeeked={drawCanvas}
             className="hidden"
             playsInline
