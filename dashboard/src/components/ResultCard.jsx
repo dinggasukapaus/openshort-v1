@@ -64,6 +64,7 @@ export default function ResultCard({ clip, index, jobId, durable, uploadPostKey,
         do { prev = f; f = f.replace(/^subtitled_\d+_/, '').replace(/^hooked_\d+_/, '').replace(/^hook_/, '').replace(/^intro_\d+_/, ''); } while (f !== prev);
         return f;
     };
+    const originalVideoUrl = getApiUrl((clip.video_url || '').replace(/[^/]+$/, stripBurns((clip.video_url || '').split('/').pop())));
     const initialRawFile = (clip.video_url || '').split('/').pop();
     const initialCleanFile = (initialRawFile || '').replace(/^hooked_\d+_/, '').replace(/^hook_/, '');
     const [currentVideoUrl, setCurrentVideoUrl] = useState(getApiUrl((clip.video_url || '').replace(/[^/]+$/, initialCleanFile)));
