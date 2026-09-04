@@ -22,14 +22,9 @@ export default function MediaInput({ onProcess, isProcessing }) {
     const [targetClips, setTargetClips] = useState('');
     const [clipMinSeconds, setClipMinSeconds] = useState('');
     const [clipMaxSeconds, setClipMaxSeconds] = useState('');
-    // Auto-hook: burn the AI hook text into every clip. On by default; the
-    // choice persists so turning it off sticks across sessions.
-    const [autoHook, setAutoHook] = useState(() => {
-        try { return localStorage.getItem('os_auto_hook') !== '0'; } catch { return true; }
-    });
-    const [autoHookStyle, setAutoHookStyle] = useState(() => {
-        try { return localStorage.getItem('os_auto_hook_style') || 'classic'; } catch { return 'classic'; }
-    });
+    // Auto-hook disabled in favor of Viral 9:16 Shorts Thumbnail & Video Intro Studio
+    const [autoHook, setAutoHook] = useState(false);
+    const [autoHookStyle, setAutoHookStyle] = useState('classic');
     // Layout: 'auto' lets the AI pick per video (server default); the others
     // force one on so a podcast host who knows what they uploaded doesn't
     // depend on the detector, and 'none' keeps the plain single crop.
@@ -308,31 +303,6 @@ export default function MediaInput({ onProcess, isProcessing }) {
                                     <option value="screencast">Screen over presenter</option>
                                     <option value="none">Single crop only</option>
                                 </select>
-                            </div>
-                            <div className="col-span-1 sm:col-span-3 flex flex-wrap items-center justify-between gap-3 pt-3 sm:pt-1 border-t border-rule">
-                                <label className="flex items-center gap-2 text-xs text-ink2 cursor-pointer select-none">
-                                    <input
-                                        type="checkbox"
-                                        checked={autoHook}
-                                        onChange={(e) => setAutoHook(e.target.checked)}
-                                        className="w-4 h-4 shrink-0 accent-[var(--color-accent)] cursor-pointer"
-                                    />
-                                    auto hook titles on clips
-                                </label>
-                                {autoHook && (
-                                    <select
-                                        value={autoHookStyle}
-                                        onChange={(e) => setAutoHookStyle(e.target.value)}
-                                        className="input-field !w-auto text-xs py-1.5"
-                                    >
-                                        <option value="classic">Classic</option>
-                                        <option value="dark">Dark</option>
-                                        <option value="yellow">Yellow</option>
-                                        <option value="red">Red</option>
-                                        <option value="outline">Outline</option>
-                                        <option value="outline_yellow">Outline+</option>
-                                    </select>
-                                )}
                             </div>
                         </div>
                     )}

@@ -3,7 +3,6 @@ import { Download, Share2, Instagram, Youtube, Video, AlertCircle, Loader2, Copy
 import { getApiUrl } from '../config';
 import { apiFetch } from '../lib/api';
 import SubtitleModal from './SubtitleModal';
-import HookModal from './HookModal';
 import TranslateModal from './TranslateModal';
 import ShortsThumbnailModal from './ShortsThumbnailModal';
 import Modal from './ui/Modal';
@@ -65,8 +64,9 @@ export default function ResultCard({ clip, index, jobId, durable, uploadPostKey,
         do { prev = f; f = f.replace(/^subtitled_\d+_/, '').replace(/^hooked_\d+_/, '').replace(/^hook_/, '').replace(/^intro_\d+_/, ''); } while (f !== prev);
         return f;
     };
-    const originalVideoUrl = getApiUrl((clip.video_url || '').replace(/[^/]+$/, stripBurns((clip.video_url || '').split('/').pop())));
-    const [currentVideoUrl, setCurrentVideoUrl] = useState(getApiUrl(clip.video_url));
+    const initialRawFile = (clip.video_url || '').split('/').pop();
+    const initialCleanFile = (initialRawFile || '').replace(/^hooked_\d+_/, '').replace(/^hook_/, '');
+    const [currentVideoUrl, setCurrentVideoUrl] = useState(getApiUrl((clip.video_url || '').replace(/[^/]+$/, initialCleanFile)));
     // Where the <video> element pulls its bytes from. The clips are archived to
     // R2 anyway, and R2 egress is free and edge-served, while /videos is served
     // by the same single-worker API process that is running the renders. So play
@@ -120,16 +120,6 @@ export default function ResultCard({ clip, index, jobId, durable, uploadPostKey,
     const [isEditingTitle, setIsEditingTitle] = useState(false);
     const [tempTitle, setTempTitle] = useState(customTitle);
 
-    const [customHook, setCustomHook] = useState(() => {
-        try {
-            return localStorage.getItem(`openshorts_clip_${jobId}_${index}_hook`) || clip.viral_hook_text || (clip.auto_hook?.text) || "";
-        } catch {
-            return clip.viral_hook_text || (clip.auto_hook?.text) || "";
-        }
-    });
-    const [isEditingHook, setIsEditingHook] = useState(false);
-    const [tempHook, setTempHook] = useState(customHook);
-
     const saveTitle = (e) => {
         if (e) e.preventDefault();
         setCustomTitle(tempTitle);
@@ -142,20 +132,6 @@ export default function ResultCard({ clip, index, jobId, durable, uploadPostKey,
     const cancelTitle = () => {
         setTempTitle(customTitle);
         setIsEditingTitle(false);
-    };
-
-    const saveHook = (e) => {
-        if (e) e.preventDefault();
-        setCustomHook(tempHook);
-        setIsEditingHook(false);
-        try {
-            localStorage.setItem(`openshorts_clip_${jobId}_${index}_hook`, tempHook);
-        } catch {}
-    };
-
-    const cancelHook = () => {
-        setTempHook(customHook);
-        setIsEditingHook(false);
     };
 
     const cycleStatus = (e) => {
@@ -206,15 +182,11 @@ export default function ResultCard({ clip, index, jobId, durable, uploadPostKey,
 
     const copyAllMeta = () => {
         const title = customTitle || clip.video_title_for_youtube_short || "Viral Short Video";
-        const hook = customHook || clip.viral_hook_text || (clip.auto_hook?.text) || "";
         const caption = clip.video_description_for_tiktok || clip.video_description_for_instagram || "";
         const nicheObj = NICHE_PRESETS.find(n => n.id === selectedNiche) || NICHE_PRESETS[0];
         const tags = nicheObj.tags;
 
         let text = `📌 TITLE / JUDUL:\n${title}\n\n`;
-        if (hook) {
-            text += `⚡ VIRAL HOOK:\n${hook}\n\n`;
-        }
         text += `📝 CAPTION & TAGS (${nicheObj.label}):\n${caption}\n\n${tags}`;
 
         navigator.clipboard.writeText(text);
@@ -297,7 +269,7 @@ export default function ResultCard({ clip, index, jobId, durable, uploadPostKey,
     // All server-side operations must chain from this, so burned-in edits
     // (subtitles, hooks, effects) never get silently dropped.
     // A reopened project seeds it from the persisted project state.
-    const [serverVideoFile, setServerVideoFile] = useState(initialState?.server_file || (clip.video_url || '').split('/').pop());
+    const [serverVideoFile, setServerVideoFile] = useState(initialState?.server_file ? initialState.server_file.replace(/^hooked_\d+_/, '').replace(/^hook_/, '') : initialCleanFile);
     // Strip intro and hook burns so thumbnail canvas and intro burner always use the clean video base (preserving subtitles if any)
     const stripIntroAndHook = (filename) => {
         let f = filename || '', prev;
@@ -339,8 +311,9 @@ export default function ResultCard({ clip, index, jobId, durable, uploadPostKey,
     // subtitles applied from another card), adopt it so the card shows the
     // freshly subtitled video instead of a stale one.
     useEffect(() => {
-        const serverUrl = getApiUrl(clip.video_url);
-        const serverName = (clip.video_url || '').split('/').pop();
+        const rawName = (clip.video_url || '').split('/').pop();
+        const serverName = (rawName || '').replace(/^hooked_\d+_/, '').replace(/^hook_/, '');
+        const serverUrl = getApiUrl((clip.video_url || '').replace(/[^/]+$/, serverName));
         if (serverName && serverName !== serverVideoFile) {
             setServerVideoFile(serverName);
             setCurrentVideoUrl(serverUrl);
@@ -1129,60 +1102,6 @@ export default function ResultCard({ clip, index, jobId, durable, uploadPostKey,
 
                 {/* Descriptions (compact) — full text lives in the modal */}
                 <div className="flex-1 min-h-0 space-y-2 mb-4">
-                    {/* Viral Hook Box (Editable) */}
-                    <div className="bg-paper rounded-input px-3 py-2 border border-rule min-w-0 space-y-1">
-                        <div className="flex items-center justify-between gap-1">
-                            <span className="eyebrow shrink-0 text-brass flex items-center gap-1">
-                                <Sparkles size={11} /> HOOK VIRAL
-                            </span>
-                            {!isEditingHook && (
-                                <div className="flex items-center gap-1">
-                                    <button
-                                        onClick={() => { setTempHook(customHook); setIsEditingHook(true); }}
-                                        className="p-1 rounded text-muted hover:text-brass transition-colors"
-                                        title="Edit Hook Viral"
-                                    >
-                                        <Pencil size={12} />
-                                    </button>
-                                    <button
-                                        onClick={() => handleCopy('hook', customHook)}
-                                        aria-label="copy viral hook"
-                                        className="p-1 rounded text-muted hover:text-brass transition-colors"
-                                        title="Copy Hook"
-                                    >
-                                        {copied === 'hook' ? <Check size={13} className="text-ok" /> : <Copy size={13} />}
-                                    </button>
-                                </div>
-                            )}
-                        </div>
-                        {isEditingHook ? (
-                            <form onSubmit={saveHook} className="flex items-center gap-1.5 pt-1">
-                                <input
-                                    type="text"
-                                    value={tempHook}
-                                    onChange={(e) => setTempHook(e.target.value)}
-                                    className="bg-paper border border-brass rounded px-2 py-1 text-xs text-ink w-full focus:outline-none"
-                                    placeholder="Tulis kalimat hook pembuka..."
-                                    autoFocus
-                                />
-                                <button type="submit" className="p-1 text-brass hover:text-ok" title="Simpan">
-                                    <Check size={14} />
-                                </button>
-                                <button type="button" onClick={cancelHook} className="p-1 text-muted hover:text-ink" title="Batal">
-                                    <X size={14} />
-                                </button>
-                            </form>
-                        ) : (
-                            <p
-                                onClick={() => { setTempHook(customHook); setIsEditingHook(true); }}
-                                className="text-xs text-ink2 truncate cursor-pointer hover:text-ink transition-colors"
-                                title="Klik untuk mengedit hook ini"
-                            >
-                                {customHook || "(Belum ada hook - klik untuk menambahkan)"}
-                            </p>
-                        )}
-                    </div>
-
                     <div className="bg-paper rounded-input px-3 py-2 border border-rule flex items-center gap-2 min-w-0">
                         <span className="eyebrow shrink-0">TIKTOK · IG</span>
                         <p className="text-xs text-ink2 truncate flex-1 min-w-0">
@@ -1514,21 +1433,6 @@ export default function ResultCard({ clip, index, jobId, durable, uploadPostKey,
                 existingHook={activeLayers.hook}
             />
 
-            <HookModal
-                isOpen={showHookModal}
-                onClose={() => setShowHookModal(false)}
-                onGenerate={handleHook}
-                isProcessing={isHooking}
-                videoUrl={originalVideoUrl}
-                initialText={clip.viral_hook_text}
-                durationInSeconds={clip.end && clip.start ? clip.end - clip.start : 30}
-                existingSubtitles={activeLayers.subtitles}
-                hasCaptions={!!activeLayers.subtitles || /(^|_)subtitled_/.test(serverVideoFile || '')}
-                serverRender={hasServerBurns}
-                burnedHook={burnedHook}
-                onRemove={burnedHook ? handleRemoveHook : null}
-            />
-
             <TranslateModal
                 isOpen={showTranslateModal}
                 onClose={() => setShowTranslateModal(false)}
@@ -1543,7 +1447,7 @@ export default function ResultCard({ clip, index, jobId, durable, uploadPostKey,
                 onClose={() => setShowThumbnailModal(false)}
                 videoUrl={cleanThumbVideoUrl || originalVideoUrl}
                 initialTitle={customTitle || clip.video_title_for_youtube_short}
-                initialHook={customHook || clip.viral_hook_text || clip.video_description_for_tiktok}
+                initialHook={clip.video_description_for_tiktok || clip.video_description_for_instagram || clip.viral_hook_text || ''}
                 nicheLabel={NICHE_PRESETS.find(n => n.id === selectedNiche)?.label || 'Trending'}
                 jobId={jobId}
                 clipIndex={index}
