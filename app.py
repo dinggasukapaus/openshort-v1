@@ -4629,6 +4629,17 @@ class BrollSuggestRequest(BaseModel):
     clip_index: int
 
 
+class BrollMomentItem(BaseModel):
+    start_time: float
+    end_time: float
+    broll_url: Optional[str] = None
+    broll_base64: Optional[str] = None
+    broll_source: Optional[str] = "stock"
+    transition: Optional[str] = "dissolve"
+    transition_duration: Optional[float] = 0.3
+    broll_volume: Optional[float] = 0.0
+
+
 class BrollApplyRequest(BaseModel):
     job_id: str
     clip_index: int
@@ -4636,12 +4647,13 @@ class BrollApplyRequest(BaseModel):
     broll_url: Optional[str] = None
     broll_base64: Optional[str] = None
     broll_filename: Optional[str] = None
-    start_time: float
-    end_time: float
+    start_time: Optional[float] = None
+    end_time: Optional[float] = None
     transition: str = "dissolve"  # "dissolve" or "cut"
     transition_duration: float = 0.3
     broll_volume: float = 0.0
     input_filename: Optional[str] = None
+    moments: Optional[List[BrollMomentItem]] = None
 
 
 CURATED_BROLL_STOCK = [
@@ -4698,19 +4710,14 @@ CURATED_BROLL_STOCK = [
 ]
 
 
-@app.get("/api/broll/search")
-async def search_broll_stock(
+async def _fetch_stock_videos_for_query(
     query: str = "technology",
+    pexels_key: Optional[str] = None,
     orientation: str = "portrait",
     page: int = 1,
-    per_page: int = 15,
-    request: Request = None,
-    x_pexels_key: Optional[str] = Header(None, alias="X-Pexels-Key")
-):
-    raw_key = x_pexels_key if isinstance(x_pexels_key, str) else None
-    if not raw_key and request and hasattr(request, "headers"):
-        raw_key = request.headers.get("X-Pexels-Key")
-    pexels_key = raw_key or os.environ.get("PEXELS_API_KEY")
+    per_page: int = 15
+) -> Dict[str, Any]:
+    """Helper to fetch stock videos from Pexels API with graceful fallback to curated clips."""
     if pexels_key:
         try:
             async with httpx.AsyncClient(timeout=15.0) as client:
@@ -4736,6 +4743,7 @@ async def search_broll_stock(
                         chosen = portrait_files[0] if portrait_files else mp4_files[0]
                         results.append({
                             "id": v.get("id"),
+                            "title": (v.get("user", {}).get("name") or "Pexels Video") + " - " + query.title(),
                             "duration": v.get("duration", 0),
                             "image": v.get("image") or (v.get("video_pictures", [{}])[0].get("picture") if v.get("video_pictures") else ""),
                             "preview_url": chosen.get("link"),
@@ -4763,6 +4771,28 @@ async def search_broll_stock(
         "page": 1,
         "has_pexels_key": bool(pexels_key)
     }
+
+
+@app.get("/api/broll/search")
+async def search_broll_stock(
+    query: str = "technology",
+    orientation: str = "portrait",
+    page: int = 1,
+    per_page: int = 15,
+    request: Request = None,
+    x_pexels_key: Optional[str] = Header(None, alias="X-Pexels-Key")
+):
+    raw_key = x_pexels_key if isinstance(x_pexels_key, str) else None
+    if not raw_key and request and hasattr(request, "headers"):
+        raw_key = request.headers.get("X-Pexels-Key")
+    pexels_key = raw_key or os.environ.get("PEXELS_API_KEY")
+    return await _fetch_stock_videos_for_query(
+        query=query,
+        pexels_key=pexels_key,
+        orientation=orientation,
+        page=page,
+        per_page=per_page
+    )
 
 
 # Comprehensive Indonesian visual lexicon for contextual B-roll matching
@@ -4970,6 +5000,23 @@ Ensure start_sec >= 0.0 and end_sec <= {duration_sec:.1f}.
             }
         ]
 
+    # Auto-resolve a matching stock video for each suggestion so frontend can preview & batch apply
+    raw_pexels_key = (request.headers.get("X-Pexels-Key") if hasattr(request, "headers") else None)
+    pexels_key = raw_pexels_key or os.environ.get("PEXELS_API_KEY")
+
+    for sug in suggestions:
+        kw = sug.get("keyword", "technology")
+        try:
+            stock_res = await _fetch_stock_videos_for_query(query=kw, pexels_key=pexels_key, per_page=1)
+            vids = stock_res.get("results", [])
+            if vids:
+                sug["stock_video"] = vids[0]
+            else:
+                sug["stock_video"] = CURATED_BROLL_STOCK[0]
+        except Exception as err:
+            print(f"⚠️ Failed to auto-match stock video for '{kw}': {err}")
+            sug["stock_video"] = CURATED_BROLL_STOCK[0]
+
     return {
         "suggestions": suggestions,
         "clip_duration": duration_sec,
@@ -4978,8 +5025,9 @@ Ensure start_sec >= 0.0 and end_sec <= {duration_sec:.1f}.
 
 
 @app.post("/api/broll/apply")
+@app.post("/api/broll/apply-all")
 async def apply_broll_to_clip(req: BrollApplyRequest, request: Request):
-    """Burn a B-Roll video/image overlay onto the clip with seamless transition and audio preservation."""
+    """Burn one or multiple B-Roll video/image overlays onto the clip with seamless transition and audio preservation."""
     await require_managed_entitlement(request)
     await _ensure_job_files(req.job_id, request)
     if req.job_id not in jobs:
@@ -5013,126 +5061,166 @@ async def apply_broll_to_clip(req: BrollApplyRequest, request: Request):
     if not os.path.exists(input_path):
         raise HTTPException(status_code=404, detail=f"Base video file not found: {input_path}")
 
-    # Prepare B-Roll media file
-    temp_files_to_clean = []
-    now_ms = int(time.time() * 1000)
-    temp_broll_path = os.path.join(output_dir, f"temp_broll_{now_ms}.mp4")
+    # Determine list of moments to apply (batch or single)
+    raw_moments = []
+    if req.moments and len(req.moments) > 0:
+        raw_moments = req.moments
+    elif req.start_time is not None and req.end_time is not None:
+        raw_moments = [
+            BrollMomentItem(
+                start_time=req.start_time,
+                end_time=req.end_time,
+                broll_url=req.broll_url,
+                broll_base64=req.broll_base64,
+                broll_source=req.broll_source,
+                transition=req.transition,
+                transition_duration=req.transition_duration,
+                broll_volume=req.broll_volume
+            )
+        ]
+    else:
+        raise HTTPException(status_code=400, detail="No B-roll moments or timings provided")
 
-    try:
-        if req.broll_base64:
-            header, encoded = req.broll_base64.split(",", 1) if "," in req.broll_base64 else ("", req.broll_base64)
-            raw_bytes = base64.b64decode(encoded)
-            is_image = header.startswith("data:image") or (len(raw_bytes) > 8 and (raw_bytes[:8].startswith(b"\x89PNG\r\n\x1a\n") or raw_bytes[:2] == b"\xff\xd8"))
-            if is_image:
-                temp_broll_path = os.path.join(output_dir, f"temp_broll_{now_ms}.png")
-            with open(temp_broll_path, "wb") as f:
-                f.write(raw_bytes)
-            temp_files_to_clean.append(temp_broll_path)
-        elif req.broll_url:
-            clean_url = req.broll_url.strip()
-            # If broll_url points to a local stock asset in assets/broll
-            if "/assets/broll/" in clean_url or clean_url.startswith("assets/broll/") or clean_url.startswith("/assets/broll/"):
-                asset_filename = os.path.basename(clean_url.split("?")[0])
-                local_asset_path = os.path.join("assets", "broll", asset_filename)
-                if os.path.exists(local_asset_path):
-                    shutil.copy2(local_asset_path, temp_broll_path)
-                    temp_files_to_clean.append(temp_broll_path)
+    # Prepare media for all moments
+    temp_files_to_clean = []
+    prepared_moments = []
+    now_ms = int(time.time() * 1000)
+
+    for idx, m in enumerate(raw_moments):
+        bstart = max(0.0, float(m.start_time))
+        bend = max(bstart + 0.5, float(m.end_time))
+        bdur = bend - bstart
+        if bdur <= 0.2:
+            continue
+
+        temp_media_path = os.path.join(output_dir, f"temp_broll_{now_ms}_{idx}.mp4")
+
+        try:
+            if m.broll_base64:
+                header, encoded = m.broll_base64.split(",", 1) if "," in m.broll_base64 else ("", m.broll_base64)
+                raw_bytes = base64.b64decode(encoded)
+                is_image = header.startswith("data:image") or (len(raw_bytes) > 8 and (raw_bytes[:8].startswith(b"\x89PNG\r\n\x1a\n") or raw_bytes[:2] == b"\xff\xd8"))
+                if is_image:
+                    temp_media_path = os.path.join(output_dir, f"temp_broll_{now_ms}_{idx}.png")
+                with open(temp_media_path, "wb") as f:
+                    f.write(raw_bytes)
+                temp_files_to_clean.append(temp_media_path)
+            elif m.broll_url:
+                clean_url = m.broll_url.strip()
+                if "/assets/broll/" in clean_url or clean_url.startswith("assets/broll/") or clean_url.startswith("/assets/broll/"):
+                    asset_filename = os.path.basename(clean_url.split("?")[0])
+                    local_asset_path = os.path.join("assets", "broll", asset_filename)
+                    if os.path.exists(local_asset_path):
+                        shutil.copy2(local_asset_path, temp_media_path)
+                        temp_files_to_clean.append(temp_media_path)
+                    else:
+                        raise HTTPException(status_code=404, detail=f"Local B-roll asset not found: {asset_filename}")
                 else:
-                    raise HTTPException(status_code=404, detail=f"Local B-roll asset not found: {asset_filename}")
+                    browser_headers = {
+                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+                        "Accept": "*/*"
+                    }
+                    async with httpx.AsyncClient(headers=browser_headers, timeout=45.0, follow_redirects=True) as client:
+                        res = await client.get(clean_url)
+                        res.raise_for_status()
+                        content_type = res.headers.get("content-type", "")
+                        is_image = "image" in content_type or clean_url.lower().endswith(('.png', '.jpg', '.jpeg', '.webp'))
+                        if is_image:
+                            temp_media_path = os.path.join(output_dir, f"temp_broll_{now_ms}_{idx}.png")
+                        with open(temp_media_path, "wb") as f:
+                            f.write(res.content)
+                    temp_files_to_clean.append(temp_media_path)
             else:
-                browser_headers = {
-                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-                    "Accept": "*/*"
-                }
-                async with httpx.AsyncClient(headers=browser_headers, timeout=45.0, follow_redirects=True) as client:
-                    res = await client.get(clean_url)
-                    res.raise_for_status()
-                    content_type = res.headers.get("content-type", "")
-                    is_image = "image" in content_type or clean_url.lower().endswith(('.png', '.jpg', '.jpeg', '.webp'))
-                    if is_image:
-                        temp_broll_path = os.path.join(output_dir, f"temp_broll_{now_ms}.png")
-                    with open(temp_broll_path, "wb") as f:
-                        f.write(res.content)
-                temp_files_to_clean.append(temp_broll_path)
-        else:
-            raise HTTPException(status_code=400, detail="Missing B-roll media (broll_url or broll_base64 required)")
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Failed to prepare B-roll media: {e}")
+                continue
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Failed to prepare B-roll media for moment {idx+1}: {e}")
+
+        is_img = temp_media_path.lower().endswith(('.png', '.jpg', '.jpeg', '.webp'))
+        fade_d = min(float(m.transition_duration or 0.3), bdur / 3.0)
+        prepared_moments.append({
+            "start": bstart,
+            "end": bend,
+            "duration": bdur,
+            "fade_d": fade_d,
+            "transition": (m.transition or "dissolve").lower(),
+            "volume": float(m.broll_volume or 0.0),
+            "media_path": temp_media_path,
+            "is_img": is_img
+        })
+
+    if not prepared_moments:
+        for tf in temp_files_to_clean:
+            if os.path.exists(tf):
+                try: os.remove(tf)
+                except Exception: pass
+        raise HTTPException(status_code=400, detail="No valid B-roll media could be prepared")
+
+    # Sort chronologically by start time
+    prepared_moments.sort(key=lambda x: x["start"])
 
     from ffmpeg_utils import get_ffmpeg_bin
     ffmpeg_bin = get_ffmpeg_bin()
 
-    bstart = max(0.0, float(req.start_time))
-    bend = max(bstart + 0.5, float(req.end_time))
-    bdur = bend - bstart
-    fade_d = min(float(req.transition_duration or 0.3), bdur / 3.0)
-    transition = (req.transition or "dissolve").lower()
+    input_args = ["-i", input_path]
+    filters = []
+    prev_v = "0:v"
 
-    is_img = temp_broll_path.lower().endswith(('.png', '.jpg', '.jpeg', '.webp'))
+    for i, pm in enumerate(prepared_moments):
+        in_v = f"{i+1}:v"
+        b_label = f"broll_v{i}"
+        next_v = "vout" if i == len(prepared_moments) - 1 else f"v{i+1}"
+        s = pm["start"]
+        e = pm["end"]
+        fd = pm["fade_d"]
+        trans = pm["transition"]
 
-    if is_img:
-        if transition == "dissolve" and fade_d > 0.05:
-            filter_str = (
-                f"[1:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,fps=30,setsar=1,"
-                f"fade=t=in:st={bstart:.2f}:d={fade_d:.2f}:alpha=1,"
-                f"fade=t=out:st={bend - fade_d:.2f}:d={fade_d:.2f}:alpha=1[broll_v];"
-                f"[0:v][broll_v]overlay=x=0:y=0:enable='between(t,{bstart:.2f},{bend:.2f})':eof_action=pass[vout]"
-            )
+        if pm["is_img"]:
+            input_args.extend(["-loop", "1", "-t", str(e + 2.0), "-i", pm["media_path"]])
+            if trans == "dissolve" and fd > 0.05:
+                filters.append(
+                    f"[{in_v}]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,fps=30,setsar=1,"
+                    f"fade=t=in:st={s:.2f}:d={fd:.2f}:alpha=1,"
+                    f"fade=t=out:st={e - fd:.2f}:d={fd:.2f}:alpha=1[{b_label}];"
+                    f"[{prev_v}][{b_label}]overlay=x=0:y=0:enable='between(t,{s:.2f},{e:.2f})':eof_action=pass[{next_v}]"
+                )
+            else:
+                filters.append(
+                    f"[{in_v}]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,fps=30,setsar=1[{b_label}];"
+                    f"[{prev_v}][{b_label}]overlay=x=0:y=0:enable='between(t,{s:.2f},{e:.2f})':eof_action=pass[{next_v}]"
+                )
         else:
-            filter_str = (
-                f"[1:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,fps=30,setsar=1[broll_v];"
-                f"[0:v][broll_v]overlay=x=0:y=0:enable='between(t,{bstart:.2f},{bend:.2f})':eof_action=pass[vout]"
-            )
-        input_args = [
-            "-i", input_path,
-            "-loop", "1", "-t", str(bend + 2.0), "-i", temp_broll_path
-        ]
-    else:
-        if transition == "dissolve" and fade_d > 0.05:
-            filter_str = (
-                f"[1:v]setpts=PTS-STARTPTS+{bstart:.2f}/TB,scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,fps=30,setsar=1,"
-                f"fade=t=in:st={bstart:.2f}:d={fade_d:.2f}:alpha=1,"
-                f"fade=t=out:st={bend - fade_d:.2f}:d={fade_d:.2f}:alpha=1[broll_v];"
-                f"[0:v][broll_v]overlay=x=0:y=0:enable='between(t,{bstart:.2f},{bend:.2f})':eof_action=pass[vout]"
-            )
-        else:
-            filter_str = (
-                f"[1:v]setpts=PTS-STARTPTS+{bstart:.2f}/TB,scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,fps=30,setsar=1[broll_v];"
-                f"[0:v][broll_v]overlay=x=0:y=0:enable='between(t,{bstart:.2f},{bend:.2f})':eof_action=pass[vout]"
-            )
-        input_args = [
-            "-i", input_path,
-            "-stream_loop", "-1", "-i", temp_broll_path
-        ]
+            input_args.extend(["-stream_loop", "-1", "-i", pm["media_path"]])
+            if trans == "dissolve" and fd > 0.05:
+                filters.append(
+                    f"[{in_v}]setpts=PTS-STARTPTS+{s:.2f}/TB,scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,fps=30,setsar=1,"
+                    f"fade=t=in:st={s:.2f}:d={fd:.2f}:alpha=1,"
+                    f"fade=t=out:st={e - fd:.2f}:d={fd:.2f}:alpha=1[{b_label}];"
+                    f"[{prev_v}][{b_label}]overlay=x=0:y=0:enable='between(t,{s:.2f},{e:.2f})':eof_action=pass[{next_v}]"
+                )
+            else:
+                filters.append(
+                    f"[{in_v}]setpts=PTS-STARTPTS+{s:.2f}/TB,scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,fps=30,setsar=1[{b_label}];"
+                    f"[{prev_v}][{b_label}]overlay=x=0:y=0:enable='between(t,{s:.2f},{e:.2f})':eof_action=pass[{next_v}]"
+                )
+        prev_v = next_v
+
+    filter_str = ";".join(filters)
 
     output_filename = f"broll_{int(time.time())}_{filename}"
     output_path = os.path.join(output_dir, output_filename)
 
-    if req.broll_volume > 0.01 and not is_img:
-        filter_str += f";[1:a]volume={float(req.broll_volume):.2f}[ba];[0:a][ba]amix=inputs=2:duration=first:dropout_transition=0[aout]"
-        cmd = [
-            ffmpeg_bin, "-y",
-            *input_args,
-            "-filter_complex", filter_str,
-            "-map", "[vout]",
-            "-map", "[aout]",
-            "-c:v", "libx264", "-pix_fmt", "yuv420p", "-preset", "fast", "-crf", "18",
-            "-c:a", "aac", "-b:a", "192k",
-            output_path
-        ]
-    else:
-        cmd = [
-            ffmpeg_bin, "-y",
-            *input_args,
-            "-filter_complex", filter_str,
-            "-map", "[vout]",
-            "-map", "0:a?",
-            "-c:v", "libx264", "-pix_fmt", "yuv420p", "-preset", "fast", "-crf", "18",
-            "-c:a", "copy",
-            output_path
-        ]
+    cmd = [
+        ffmpeg_bin, "-y",
+        *input_args,
+        "-filter_complex", filter_str,
+        "-map", "[vout]",
+        "-map", "0:a?",
+        "-c:v", "libx264", "-pix_fmt", "yuv420p", "-preset", "fast", "-crf", "18",
+        "-c:a", "copy",
+        output_path
+    ]
 
     try:
         subprocess.run(cmd, capture_output=True, text=True, check=True)
@@ -5162,7 +5250,8 @@ async def apply_broll_to_clip(req: BrollApplyRequest, request: Request):
 
     return {
         "success": True,
-        "new_video_url": new_video_url
+        "new_video_url": new_video_url,
+        "applied_moments": len(prepared_moments)
     }
 
 

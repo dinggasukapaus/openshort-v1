@@ -58,6 +58,9 @@ export default function BrollModal({
   const [suggestions, setSuggestions] = useState([]);
   const [isLoadingAi, setIsLoadingAi] = useState(false);
   const [aiError, setAiError] = useState(null);
+  const [selectedMoments, setSelectedMoments] = useState({});
+  const [momentCustomVideos, setMomentCustomVideos] = useState({});
+  const [momentPickerIndex, setMomentPickerIndex] = useState(null);
 
   // Transcript & Timing State
   const [captions, setCaptions] = useState([]);
@@ -177,8 +180,15 @@ export default function BrollModal({
       });
       if (res.ok) {
         const data = await res.json();
-        setSuggestions(data.suggestions || []);
-        if (!data.suggestions || data.suggestions.length === 0) {
+        const sugs = data.suggestions || [];
+        setSuggestions(sugs);
+        // Default select all suggestions
+        const initialSelected = {};
+        sugs.forEach((_, idx) => {
+          initialSelected[idx] = true;
+        });
+        setSelectedMoments(initialSelected);
+        if (sugs.length === 0) {
           setAiError('Tidak ada momen B-Roll yang terdeteksi dari transkrip.');
         }
       } else {
@@ -192,6 +202,30 @@ export default function BrollModal({
     }
   };
 
+  const selectedCount = Object.values(selectedMoments).filter(Boolean).length;
+  const allSelected = suggestions.length > 0 && selectedCount === suggestions.length;
+
+  const handleToggleSelectAllMoments = () => {
+    if (allSelected) {
+      setSelectedMoments({});
+    } else {
+      const allSel = {};
+      suggestions.forEach((_, idx) => {
+        allSel[idx] = true;
+      });
+      setSelectedMoments(allSel);
+    }
+  };
+
+  const handlePickCustomVideoForMoment = (idx, keyword) => {
+    setMomentPickerIndex(idx);
+    setActiveTab('stock');
+    if (keyword) {
+      setSearchQuery(keyword);
+      fetchStockVideos(keyword);
+    }
+  };
+
   const handleApplySuggestion = (sug) => {
     setStartTime(Number(sug.start_sec.toFixed(1)));
     setEndTime(Number(sug.end_sec.toFixed(1)));
@@ -199,6 +233,79 @@ export default function BrollModal({
       setSearchQuery(sug.keyword);
       setActiveTab('stock');
       fetchStockVideos(sug.keyword);
+    }
+  };
+
+  // 3b. Batch apply all selected AI moments
+  const handleApplyAllMoments = async () => {
+    const activeIndices = Object.entries(selectedMoments)
+      .filter(([_, sel]) => sel)
+      .map(([idx]) => parseInt(idx, 10))
+      .sort((a, b) => a - b);
+
+    if (activeIndices.length === 0) {
+      setApplyError('Pilih minimal 1 momen B-roll untuk diterapkan.');
+      return;
+    }
+
+    const momentsPayload = [];
+    for (const idx of activeIndices) {
+      const sug = suggestions[idx];
+      if (!sug) continue;
+      const vid = momentCustomVideos[idx] || sug.stock_video;
+      const mediaUrl = vid?.download_url || vid?.preview_url;
+      if (!mediaUrl) {
+        setApplyError(`Momen #${idx + 1} ("${sug.keyword}") belum memiliki footage video.`);
+        return;
+      }
+      momentsPayload.push({
+        start_time: sug.start_sec,
+        end_time: sug.end_sec,
+        broll_url: mediaUrl,
+        transition: transition,
+        transition_duration: 0.3,
+        broll_volume: brollVolume,
+      });
+    }
+
+    setIsApplying(true);
+    setApplyError(null);
+    setApplySuccess(false);
+
+    try {
+      const payload = {
+        job_id: jobId,
+        clip_index: clipIndex,
+        input_filename: inputFilename || null,
+        moments: momentsPayload,
+      };
+
+      const res = await apiFetch('/api/broll/apply', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || 'Gagal menerapkan B-Roll ke video');
+      }
+
+      const data = await res.json();
+      setApplySuccess(true);
+
+      if (onBrollApplied && data.new_video_url) {
+        onBrollApplied(data.new_video_url);
+      }
+
+      setTimeout(() => {
+        onClose();
+      }, 1500);
+    } catch (err) {
+      console.error('B-Roll apply all error:', err);
+      setApplyError(err.message || 'Terjadi kesalahan saat merender semua B-roll.');
+    } finally {
+      setIsApplying(false);
     }
   };
 
@@ -528,6 +635,28 @@ export default function BrollModal({
                 </div>
               )}
 
+              {/* Moment Picker Mode Notice Banner */}
+              {momentPickerIndex !== null && (
+                <div className="flex items-center justify-between p-2.5 bg-brass/15 border border-brass/40 rounded-lg text-xs">
+                  <div className="flex items-center gap-2">
+                    <Sparkles size={14} className="text-brass shrink-0" />
+                    <span>
+                      Mode Pilih Footage: <strong>Momen #{momentPickerIndex + 1}</strong> (&quot;{suggestions[momentPickerIndex]?.keyword}&quot;)
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMomentPickerIndex(null);
+                      setActiveTab('ai');
+                    }}
+                    className="text-xs font-semibold text-brass hover:underline ml-2"
+                  >
+                    Batal
+                  </button>
+                </div>
+              )}
+
               {/* Search Bar & Quick Tags */}
               <div className="flex gap-2">
                 <div className="relative flex-1">
@@ -584,6 +713,15 @@ export default function BrollModal({
                       <div
                         key={v.id}
                         onClick={() => {
+                          if (momentPickerIndex !== null) {
+                            setMomentCustomVideos(prev => ({
+                              ...prev,
+                              [momentPickerIndex]: v
+                            }));
+                            setMomentPickerIndex(null);
+                            setActiveTab('ai');
+                            return;
+                          }
                           setSelectedStock(v);
                           setUploadedMediaBase64(null);
                           setUploadedPreviewUrl(null);
@@ -700,36 +838,134 @@ export default function BrollModal({
                   {aiError || 'Klik tombol Analisis untuk mendapatkan saran momen B-roll otomatis.'}
                 </div>
               ) : (
-                <div className="space-y-2 max-h-[200px] overflow-y-auto custom-scrollbar pr-1">
-                  {suggestions.map((sug, idx) => (
-                    <div
-                      key={idx}
-                      className="p-2.5 rounded-lg bg-paper2 border border-rule hover:border-brass/60 transition-colors flex items-center justify-between gap-3"
-                    >
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono text-brass font-bold text-[11px] bg-brass/10 px-2 py-0.5 rounded">
-                            ⏱️ {sug.start_sec.toFixed(1)}s - {sug.end_sec.toFixed(1)}s
-                          </span>
-                          <span className="text-[11px] font-semibold text-ink">
-                            Keyword: &quot;{sug.keyword}&quot;
-                          </span>
-                        </div>
-                        {sug.quote && (
-                          <div className="text-[11px] text-brass/90 font-medium italic bg-brass/5 px-2 py-0.5 rounded border border-brass/20 inline-block">
-                            &ldquo;{sug.quote}&rdquo;
-                          </div>
-                        )}
-                        <p className="text-[11px] text-muted">{sug.reason}</p>
-                      </div>
+                <div className="space-y-2.5">
+                  {/* Batch Action Bar */}
+                  <div className="flex flex-wrap items-center justify-between gap-2 p-2 bg-paper2 rounded-lg border border-rule">
+                    <div className="flex items-center gap-2">
                       <button
-                        onClick={() => handleApplySuggestion(sug)}
-                        className="px-2.5 py-1.5 bg-brass text-black font-bold text-[11px] rounded-input hover:bg-brass-dark shrink-0 flex items-center gap-1 shadow transition-colors"
+                        type="button"
+                        onClick={handleToggleSelectAllMoments}
+                        className="text-xs text-brass hover:underline font-medium cursor-pointer"
                       >
-                        Pilih <ChevronRight size={12} />
+                        {allSelected ? 'Batal Pilih Semua' : 'Pilih Semua Momen'}
                       </button>
+                      <span className="text-[11px] text-muted">
+                        ({selectedCount} dari {suggestions.length} momen dipilih)
+                      </span>
                     </div>
-                  ))}
+
+                    <button
+                      type="button"
+                      onClick={handleApplyAllMoments}
+                      disabled={isApplying || selectedCount === 0}
+                      className="btn-primary text-xs px-3 py-1.5 rounded-input font-bold flex items-center gap-1.5 shadow"
+                    >
+                      {isApplying ? (
+                        <>
+                          <Loader2 size={13} className="animate-spin text-black" />
+                          <span>Menerapkan {selectedCount} Momen...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles size={13} className="text-black" />
+                          <span>⚡ Terapkan Semua Momen ({selectedCount})</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+
+                  {/* Suggestions List */}
+                  <div className="space-y-2 max-h-[220px] overflow-y-auto custom-scrollbar pr-1">
+                    {suggestions.map((sug, idx) => {
+                      const isChecked = !!selectedMoments[idx];
+                      const vid = momentCustomVideos[idx] || sug.stock_video;
+                      const thumbImg = vid?.image?.startsWith('/') ? getApiUrl(vid.image) : vid?.image;
+
+                      return (
+                        <div
+                          key={idx}
+                          className={`p-2.5 rounded-lg border transition-all flex items-center gap-3 ${
+                            isChecked
+                              ? 'bg-paper2 border-brass/50 shadow-sm'
+                              : 'bg-paper2/50 border-rule opacity-60'
+                          }`}
+                        >
+                          {/* Checkbox */}
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={(e) => {
+                              setSelectedMoments(prev => ({
+                                ...prev,
+                                [idx]: e.target.checked
+                              }));
+                            }}
+                            className="w-4 h-4 rounded text-brass focus:ring-brass cursor-pointer shrink-0"
+                          />
+
+                          {/* Video Thumbnail preview */}
+                          {thumbImg && (
+                            <div className="relative w-12 h-16 rounded-md overflow-hidden bg-black shrink-0 border border-rule group/thumb shadow-sm">
+                              <img
+                                src={thumbImg}
+                                alt={vid?.title || 'B-Roll'}
+                                className="w-full h-full object-cover"
+                              />
+                              <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
+                                <Film size={12} className="text-white/80" />
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Info */}
+                          <div className="space-y-1 flex-1 min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="font-mono text-brass font-bold text-[11px] bg-brass/10 px-2 py-0.5 rounded shrink-0">
+                                ⏱️ {sug.start_sec.toFixed(1)}s - {sug.end_sec.toFixed(1)}s
+                              </span>
+                              <span className="text-[11px] font-semibold text-ink truncate">
+                                Keyword: &quot;{sug.keyword}&quot;
+                              </span>
+                            </div>
+
+                            {sug.quote && (
+                              <div className="text-[11px] text-brass/90 font-medium italic bg-brass/5 px-2 py-0.5 rounded border border-brass/20 inline-block line-clamp-1">
+                                &ldquo;{sug.quote}&rdquo;
+                              </div>
+                            )}
+
+                            <p className="text-[11px] text-muted line-clamp-1">{sug.reason}</p>
+
+                            {vid?.title && (
+                              <p className="text-[10px] text-muted flex items-center gap-1 truncate">
+                                🎬 Footage: <span className="text-ink truncate">{vid.title}</span>
+                              </p>
+                            )}
+                          </div>
+
+                          {/* Actions */}
+                          <div className="flex flex-col gap-1 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => handlePickCustomVideoForMoment(idx, sug.keyword)}
+                              className="px-2 py-1 bg-paper3 hover:bg-paper hover:text-ink text-muted text-[10px] rounded border border-rule transition-colors whitespace-nowrap"
+                              title="Ganti video footage untuk momen ini"
+                            >
+                              Ganti Video
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleApplySuggestion(sug)}
+                              className="px-2 py-1 bg-brass/20 hover:bg-brass text-ink hover:text-black font-semibold text-[10px] rounded transition-colors whitespace-nowrap"
+                              title="Edit timing secara manual di bawah"
+                            >
+                              Edit Manual
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               )}
             </div>
@@ -837,23 +1073,43 @@ export default function BrollModal({
             >
               Batal
             </button>
-            <button
-              onClick={handleApplyBroll}
-              disabled={isApplying}
-              className="btn-primary px-5 py-2 rounded-input text-xs font-bold flex items-center gap-2 shadow-lg disabled:opacity-50"
-            >
-              {isApplying ? (
-                <>
-                  <Loader2 size={16} className="animate-spin text-black" />
-                  <span>Menyisipkan B-Roll ke Video...</span>
-                </>
-              ) : (
-                <>
-                  <Layers size={16} />
-                  <span>Terapkan B-Roll ke Video</span>
-                </>
-              )}
-            </button>
+            {activeTab === 'ai' && suggestions.length > 0 ? (
+              <button
+                onClick={handleApplyAllMoments}
+                disabled={isApplying || selectedCount === 0}
+                className="btn-primary px-5 py-2 rounded-input text-xs font-bold flex items-center gap-2 shadow-lg disabled:opacity-50"
+              >
+                {isApplying ? (
+                  <>
+                    <Loader2 size={16} className="animate-spin text-black" />
+                    <span>Menerapkan {selectedCount} Momen B-Roll...</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles size={16} className="text-black" />
+                    <span>⚡ Terapkan Semua Momen Terpilih ({selectedCount})</span>
+                  </>
+                )}
+              </button>
+            ) : (
+              <button
+                onClick={handleApplyBroll}
+                disabled={isApplying}
+                className="btn-primary px-5 py-2 rounded-input text-xs font-bold flex items-center gap-2 shadow-lg disabled:opacity-50"
+              >
+                {isApplying ? (
+                  <>
+                    <Loader2 size={16} className="animate-spin text-black" />
+                    <span>Menyisipkan B-Roll ke Video...</span>
+                  </>
+                ) : (
+                  <>
+                    <Layers size={16} />
+                    <span>Terapkan B-Roll ke Video</span>
+                  </>
+                )}
+              </button>
+            )}
           </div>
 
         </div>
