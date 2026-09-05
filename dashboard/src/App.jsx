@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Upload, Sparkles, Youtube, Instagram, Share2, ChevronDown, Check, Activity, LayoutDashboard, Settings, Plus, History, X, Terminal, Shield, LayoutGrid, Image, Globe, RotateCcw, Calendar, AlertTriangle, KeyRound, Bot, Users, Smartphone, ExternalLink, Copy, CheckCircle2, Mail, Loader2, Download, Menu, Lock, PanelLeftClose, PanelLeft, Filter, ArrowUpDown, Keyboard, Star } from 'lucide-react';
+import { Upload, Sparkles, Youtube, Instagram, Share2, ChevronDown, Check, Activity, LayoutDashboard, Settings, Plus, History, X, Terminal, Shield, LayoutGrid, Image, Globe, RotateCcw, Calendar, AlertTriangle, KeyRound, Bot, Users, Smartphone, ExternalLink, Copy, CheckCircle2, Mail, Loader2, Download, Menu, Lock, PanelLeftClose, PanelLeft, Filter, ArrowUpDown, Keyboard, Star, Film, Key } from 'lucide-react';
 import KeyInput from './components/KeyInput';
 import MediaInput from './components/MediaInput';
 import McpConnectCard from './components/McpConnectCard';
@@ -344,6 +344,16 @@ function App() {
     if (stored) return decrypt(stored);
     return '';
   });
+
+  // Pexels API State for B-Roll Studio
+  const [pexelsKey, setPexelsKey] = useState(() => {
+    try {
+      return localStorage.getItem('openshorts_pexels_key') || '';
+    } catch {
+      return '';
+    }
+  });
+  const [pexelsSaved, setPexelsSaved] = useState(false);
 
   const [uploadUserId, setUploadUserId] = useState(() => localStorage.getItem('uploadUserId') || '');
   const [userProfiles, setUserProfiles] = useState([]); // List of {username, connected: []}
@@ -1765,6 +1775,58 @@ function App() {
                     <span className="text-muted">
                       Keys are only stored in your browser. Sent to backend only to process requests.
                     </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="card p-4 sm:p-6 mt-8">
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-input bg-paper3 flex items-center justify-center shrink-0">
+                      <Film size={16} className="text-brass" />
+                    </div>
+                    <h2 className="text-base font-medium text-ink lowercase">Stock Video B-Roll (Pexels)</h2>
+                  </div>
+                  <span className="badge-ok">Free 20,000 req/mo</span>
+                </div>
+                <p className="text-xs text-muted mb-6 leading-relaxed">
+                  Digunakan oleh <strong>B-Roll Studio &amp; Video Inserter</strong> untuk mencari dan menyisipkan jutaan stock video vertikal 9:16 gratis.
+                  Opsional jika sudah diatur di file <code>.env</code> (<code>PEXELS_API_KEY=...</code>). Preset stock video offline lokal juga tersedia otomatis tanpa kuota.
+                </p>
+                <div className="space-y-4">
+                  <label className="block text-sm text-muted">Pexels API Key</label>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <input
+                      type="password"
+                      value={pexelsKey}
+                      onChange={(e) => {
+                        setPexelsKey(e.target.value);
+                        setPexelsSaved(false);
+                      }}
+                      className="input-field"
+                      placeholder="Tempel Pexels API Key Anda..."
+                    />
+                    <button
+                      onClick={() => {
+                        try {
+                          localStorage.setItem('openshorts_pexels_key', pexelsKey.trim());
+                          setPexelsSaved(true);
+                          setTimeout(() => setPexelsSaved(false), 2000);
+                        } catch (_) {}
+                      }}
+                      className={pexelsSaved ? 'badge-ok px-4' : 'btn-quiet py-2 px-4 text-sm'}
+                    >
+                      {pexelsSaved ? <><Check size={12} /> saved</> : 'Save'}
+                    </button>
+                  </div>
+                  <div className="text-xs text-muted leading-relaxed">
+                    Dapatkan Pexels API key gratis resmi (200 req/jam, 20.000 req/bulan):
+                    <div className="mt-3">
+                      <a href="https://www.pexels.com/api/" target="_blank" rel="noopener noreferrer" className="p-2 border border-rule rounded-input hover:bg-paper3 transition-colors inline-flex items-center gap-1.5 text-ink2 font-medium">
+                        <Key size={13} className="text-brass" />
+                        <span>Daftar Pexels API Key Gratis →</span>
+                      </a>
+                    </div>
                   </div>
                 </div>
               </div>

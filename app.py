@@ -1687,6 +1687,11 @@ THUMBNAILS_DIR = os.path.join(OUTPUT_DIR, "thumbnails")
 os.makedirs(THUMBNAILS_DIR, exist_ok=True)
 app.mount("/thumbnails", StaticFiles(directory=THUMBNAILS_DIR), name="thumbnails")
 
+# Mount static files for serving local B-Roll stock assets
+BROLL_DIR = os.path.join("assets", "broll")
+os.makedirs(BROLL_DIR, exist_ok=True)
+app.mount("/assets/broll", StaticFiles(directory=BROLL_DIR), name="broll")
+
 
 def _safe_under(base_dir: str, user_rel_path: str) -> Optional[str]:
     """Resolve ``user_rel_path`` under ``base_dir`` and reject path traversal.
@@ -4642,53 +4647,53 @@ class BrollApplyRequest(BaseModel):
 CURATED_BROLL_STOCK = [
     {
         "id": "stock-tech-1",
-        "title": "Futuristic Cyber Matrix",
+        "title": "AI & Technology Cyber Grid",
         "category": "ai_tech",
-        "image": "https://images.pexels.com/photos/373543/pexels-photo-373543.jpeg?auto=compress&cs=tinysrgb&w=600",
-        "preview_url": "https://assets.mixkit.co/videos/preview/mixkit-circuit-board-details-and-glowing-circuits-40348-large.mp4",
-        "duration": 12,
-        "photographer": "Mixkit Royalty Free",
-        "photographer_url": "https://mixkit.co"
+        "image": "/assets/broll/tech.png",
+        "preview_url": "/assets/broll/tech.mp4",
+        "duration": 10,
+        "photographer": "OpenShorts Library",
+        "photographer_url": ""
     },
     {
         "id": "stock-business-1",
-        "title": "Stock Market Growth",
+        "title": "Business & Finance Growth",
         "category": "business",
-        "image": "https://images.pexels.com/photos/6801874/pexels-photo-6801874.jpeg?auto=compress&cs=tinysrgb&w=600",
-        "preview_url": "https://assets.mixkit.co/videos/preview/mixkit-financial-indicators-on-a-digital-screen-40349-large.mp4",
+        "image": "/assets/broll/business.png",
+        "preview_url": "/assets/broll/business.mp4",
         "duration": 10,
-        "photographer": "Mixkit Royalty Free",
-        "photographer_url": "https://mixkit.co"
+        "photographer": "OpenShorts Library",
+        "photographer_url": ""
     },
     {
         "id": "stock-coding-1",
-        "title": "Hacker Terminal Typing",
+        "title": "Coding & Terminal Stream",
         "category": "coding",
-        "image": "https://images.pexels.com/photos/546819/pexels-photo-546819.jpeg?auto=compress&cs=tinysrgb&w=600",
-        "preview_url": "https://assets.mixkit.co/videos/preview/mixkit-hands-of-a-programmer-typing-on-a-keyboard-40356-large.mp4",
-        "duration": 15,
-        "photographer": "Mixkit Royalty Free",
-        "photographer_url": "https://mixkit.co"
+        "image": "/assets/broll/coding.png",
+        "preview_url": "/assets/broll/coding.mp4",
+        "duration": 10,
+        "photographer": "OpenShorts Library",
+        "photographer_url": ""
     },
     {
         "id": "stock-nature-1",
-        "title": "Sunset Mountain Clouds",
+        "title": "Nature & Landscape Aerial",
         "category": "nature",
-        "image": "https://images.pexels.com/photos/417074/pexels-photo-417074.jpeg?auto=compress&cs=tinysrgb&w=600",
-        "preview_url": "https://assets.mixkit.co/videos/preview/mixkit-aerial-view-of-a-mountain-valley-during-sunset-41480-large.mp4",
-        "duration": 14,
-        "photographer": "Mixkit Royalty Free",
-        "photographer_url": "https://mixkit.co"
+        "image": "/assets/broll/nature.png",
+        "preview_url": "/assets/broll/nature.mp4",
+        "duration": 10,
+        "photographer": "OpenShorts Library",
+        "photographer_url": ""
     },
     {
         "id": "stock-reaction-1",
-        "title": "Working Fast on Laptop",
+        "title": "Dynamic Reaction & Energy",
         "category": "reaction",
-        "image": "https://images.pexels.com/photos/3184292/pexels-photo-3184292.jpeg?auto=compress&cs=tinysrgb&w=600",
-        "preview_url": "https://assets.mixkit.co/videos/preview/mixkit-young-woman-working-on-a-laptop-in-an-office-40350-large.mp4",
-        "duration": 11,
-        "photographer": "Mixkit Royalty Free",
-        "photographer_url": "https://mixkit.co"
+        "image": "/assets/broll/reaction.png",
+        "preview_url": "/assets/broll/reaction.mp4",
+        "duration": 10,
+        "photographer": "OpenShorts Library",
+        "photographer_url": ""
     }
 ]
 
@@ -4915,16 +4920,31 @@ async def apply_broll_to_clip(req: BrollApplyRequest, request: Request):
                 f.write(raw_bytes)
             temp_files_to_clean.append(temp_broll_path)
         elif req.broll_url:
-            async with httpx.AsyncClient(timeout=45.0, follow_redirects=True) as client:
-                res = await client.get(req.broll_url)
-                res.raise_for_status()
-                content_type = res.headers.get("content-type", "")
-                is_image = "image" in content_type or req.broll_url.lower().endswith(('.png', '.jpg', '.jpeg', '.webp'))
-                if is_image:
-                    temp_broll_path = os.path.join(output_dir, f"temp_broll_{now_ms}.png")
-                with open(temp_broll_path, "wb") as f:
-                    f.write(res.content)
-            temp_files_to_clean.append(temp_broll_path)
+            clean_url = req.broll_url.strip()
+            # If broll_url points to a local stock asset in assets/broll
+            if "/assets/broll/" in clean_url or clean_url.startswith("assets/broll/") or clean_url.startswith("/assets/broll/"):
+                asset_filename = os.path.basename(clean_url.split("?")[0])
+                local_asset_path = os.path.join("assets", "broll", asset_filename)
+                if os.path.exists(local_asset_path):
+                    shutil.copy2(local_asset_path, temp_broll_path)
+                    temp_files_to_clean.append(temp_broll_path)
+                else:
+                    raise HTTPException(status_code=404, detail=f"Local B-roll asset not found: {asset_filename}")
+            else:
+                browser_headers = {
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+                    "Accept": "*/*"
+                }
+                async with httpx.AsyncClient(headers=browser_headers, timeout=45.0, follow_redirects=True) as client:
+                    res = await client.get(clean_url)
+                    res.raise_for_status()
+                    content_type = res.headers.get("content-type", "")
+                    is_image = "image" in content_type or clean_url.lower().endswith(('.png', '.jpg', '.jpeg', '.webp'))
+                    if is_image:
+                        temp_broll_path = os.path.join(output_dir, f"temp_broll_{now_ms}.png")
+                    with open(temp_broll_path, "wb") as f:
+                        f.write(res.content)
+                temp_files_to_clean.append(temp_broll_path)
         else:
             raise HTTPException(status_code=400, detail="Missing B-roll media (broll_url or broll_base64 required)")
     except HTTPException:

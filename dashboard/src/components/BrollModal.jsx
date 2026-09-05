@@ -102,17 +102,26 @@ export default function BrollModal({
   const fetchStockVideos = async (query = searchQuery) => {
     setIsLoadingStock(true);
     try {
+      const savedKey = (() => {
+        try { return localStorage.getItem('openshorts_pexels_key') || customPexelsKey; } catch { return customPexelsKey; }
+      })();
       const headers = {};
-      if (customPexelsKey.trim()) {
-        headers['X-Pexels-Key'] = customPexelsKey.trim();
+      if (savedKey.trim()) {
+        headers['X-Pexels-Key'] = savedKey.trim();
       }
       const res = await apiFetch(`/api/broll/search?query=${encodeURIComponent(query)}&orientation=portrait&per_page=12`, { headers });
       if (res.ok) {
         const data = await res.json();
-        setStockVideos(data.results || []);
+        const formatted = (data.results || []).map(v => ({
+          ...v,
+          image: v.image?.startsWith('/') ? getApiUrl(v.image) : v.image,
+          preview_url: v.preview_url?.startsWith('/') ? getApiUrl(v.preview_url) : v.preview_url,
+          download_url: v.download_url || v.preview_url,
+        }));
+        setStockVideos(formatted);
         setHasPexelsKey(data.has_pexels_key || false);
-        if (data.results && data.results.length > 0 && !selectedStock && !uploadedMediaBase64 && !directVideoUrl) {
-          setSelectedStock(data.results[0]);
+        if (formatted.length > 0 && !selectedStock && !uploadedMediaBase64 && !directVideoUrl) {
+          setSelectedStock(formatted[0]);
         }
       }
     } catch (err) {
@@ -124,6 +133,10 @@ export default function BrollModal({
 
   useEffect(() => {
     if (isOpen) {
+      try {
+        const saved = localStorage.getItem('openshorts_pexels_key') || '';
+        if (saved) setCustomPexelsKey(saved);
+      } catch (_) {}
       fetchStockVideos(searchQuery);
     }
   }, [isOpen]);
