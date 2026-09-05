@@ -1485,6 +1485,7 @@ export default function ResultCard({ clip, index, jobId, durable, uploadPostKey,
                 jobId={jobId}
                 clipIndex={index}
                 inputFilename={serverVideoFile || cleanThumbFile}
+                geminiApiKey={geminiApiKey}
                 onBrollApplied={(newUrl) => {
                     const serverUrl = getApiUrl(newUrl);
                     setCurrentVideoUrl(serverUrl);

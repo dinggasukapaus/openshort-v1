@@ -25,6 +25,7 @@ export default function BrollModal({
   clipIndex,
   inputFilename,
   onBrollApplied,
+  geminiApiKey = '',
 }) {
   if (!isOpen) return null;
 
@@ -141,6 +142,12 @@ export default function BrollModal({
     }
   }, [isOpen]);
 
+  useEffect(() => {
+    if (isOpen && activeTab === 'ai' && suggestions.length === 0 && !isLoadingAi) {
+      handleFetchAiSuggestions();
+    }
+  }, [isOpen, activeTab]);
+
   const handleSavePexelsKey = (key) => {
     setCustomPexelsKey(key);
     try {
@@ -154,9 +161,15 @@ export default function BrollModal({
     setIsLoadingAi(true);
     setAiError(null);
     try {
+      const activeGeminiKey = geminiApiKey || (typeof window !== 'undefined' ? localStorage.getItem('gemini_key') || '' : '');
+      const headers = { 'Content-Type': 'application/json' };
+      if (activeGeminiKey) {
+        headers['X-Gemini-Key'] = activeGeminiKey;
+      }
+
       const res = await apiFetch('/api/broll/suggest', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           job_id: jobId,
           clip_index: clipIndex,
@@ -702,6 +715,11 @@ export default function BrollModal({
                             Keyword: &quot;{sug.keyword}&quot;
                           </span>
                         </div>
+                        {sug.quote && (
+                          <div className="text-[11px] text-brass/90 font-medium italic bg-brass/5 px-2 py-0.5 rounded border border-brass/20 inline-block">
+                            &ldquo;{sug.quote}&rdquo;
+                          </div>
+                        )}
                         <p className="text-[11px] text-muted">{sug.reason}</p>
                       </div>
                       <button

@@ -4765,6 +4765,88 @@ async def search_broll_stock(
     }
 
 
+# Comprehensive Indonesian visual lexicon for contextual B-roll matching
+INDONESIAN_BROLL_LEXICON = [
+    # Rias, Makeup, Kaca, Cermin, Codet / Luka
+    (r"\b(make\s*up|rias|dandan|lipstik|bedak|foundation|kosmetik)\b", "makeup artist applying cosmetics", "Visual proses rias wajah / make up memperkuat perkataan pembicara"),
+    (r"\b(kaca|cermin|ngeliat kaca|bercermin)\b", "person looking into mirror reflection", "Visual seseorang sedang melihat bayangan diri di cermin"),
+    (r"\b(codet|luka|bekas luka|baret|sayatan)\b", "face scar close up detail", "Visual bekas luka / codet pada wajah sesuai narasi"),
+    # Uang, Finansial, Cuan
+    (r"\b(uang|duit|cuan|dollar|rupiah|gaji|omset|kaya|tajir|penghasilan|modal|investasi|crypto|bitcoin|saham)\b", "counting cash money bills growth", "Visual uang tunai dan pertumbuhan finansial"),
+    # Coding, Komputer, Laptop, AI
+    (r"\b(koding|coding|ngoding|program|programmer|developer|software|aplikasi|script|terminal)\b", "typing on laptop keyboard coding screen", "Visual programmer sedang mengetik kode di laptop"),
+    (r"\b(ai|robot|kecerdasan buatan|artificial intelligence|gemini|chatgpt|teknologi|canggih)\b", "artificial intelligence futuristic robot cyber", "Visual teknologi AI dan grafis masa depan"),
+    (r"\b(laptop|komputer|pc|layar|monitor)\b", "person typing on modern laptop keyboard", "Visual penggunaan laptop dan teknologi"),
+    (r"\b(hp|smartphone|handphone|ponsel|chat|sosmed|tiktok|instagram|wa|whatsapp)\b", "holding smartphone scrolling typing social media", "Visual menggunakan smartphone dan media sosial"),
+    # Transportasi
+    (r"\b(mobil|nyetir|mengemudi|jalan tol|macet|kendaraan|ngebut)\b", "car driving highway dashboard view", "Visual mengemudi mobil di jalan"),
+    (r"\b(motor|sepeda motor|ngebut|helm)\b", "motorcycle rider riding road", "Visual pengendara sepeda motor di jalan raya"),
+    (r"\b(pesawat|terbang|bandara|airport|flight)\b", "airplane taking off flying clouds", "Visual penerbangan pesawat di langit"),
+    # Aktivitas Sehari-hari, Kuliner
+    (r"\b(makan|kuliner|restoran|kafe|cafe|masak|memasak|dapur|makanan|chef)\b", "delicious food cooking kitchen chef", "Visual makanan lezat dan kegiatan memasak"),
+    (r"\b(kopi|ngopi|coffee|cappuccino|latte|nongkrong)\b", "pouring coffee cup cafe aesthetic", "Visual secangkir kopi hangat yang sinematik"),
+    (r"\b(tidur|bangun tidur|kasur|kamar tidur|rebahan|capek|lelah)\b", "tired person sleeping bed waking up", "Visual beristirahat di tempat tidur"),
+    (r"\b(lari|jogging|olahraga|gym|fitness|workout|angkat beban)\b", "athlete running sprinting workout fitness", "Visual kegiatan olahraga dan kebugaran tubuh"),
+    # Emosi & Reaksi
+    (r"\b(kaget|syok|shock|terkejut|ngeri|takut|merinding)\b", "shocked surprised reaction face close up", "Visual ekspresi wajah kaget dan terkejut dramatis"),
+    (r"\b(senang|bahagia|gembira|tertawa|ketawa|senyum|lucu)\b", "happy person laughing smiling joyful", "Visual ekspresi bahagia dan senyuman positif"),
+    (r"\b(sedih|nangis|menangis|air mata|kecewa|galau|patah hati)\b", "sad person crying emotional tear", "Visual emosional kesedihan yang mendalam"),
+    (r"\b(marah|emosi|kesal|ngamuk|jengkel|geram)\b", "angry frustrated person stress reaction", "Visual ekspresi kekesalan dan frustrasi"),
+    (r"\b(sukses|juara|menang|perayaan|selebrasi|piala|berhasil)\b", "celebration victory success cheering excitement", "Visual perayaan kemenangan dan kesuksesan gemilang"),
+    (r"\b(pusing|stres|stress|bingung|mumet|overthinking)\b", "stressed person holding head headache exhausted", "Visual kelelahan mental dan rasa pusing / stres"),
+    # Kerja & Lingkungan
+    (r"\b(kantor|kerja|meeting|rapat|presentasi|bos|atasan|tim)\b", "business people meeting conference room discussion", "Visual suasana rapat dan kolaborasi kerja di kantor"),
+    (r"\b(sekolah|kuliah|kampus|belajar|buku|perpustakaan|guru|dosen)\b", "student studying library books university", "Visual suasana belajar dan membaca buku"),
+    (r"\b(alam|gunung|pantai|laut|ombak|hutan|sungai|sunset|senja)\b", "cinematic nature mountain sunset ocean aerial", "Visual keindahan panorama alam bebas"),
+    (r"\b(malam|kota|gedung|city|lampu|malam hari)\b", "night city skyline aerial timelapse neon", "Visual pemandangan kota modern di malam hari")
+]
+
+
+def _match_indonesian_broll_lexicon(captions: List[Dict], max_duration: float) -> List[Dict]:
+    """Extract context-aware visual B-roll moments from Indonesian words and timestamps."""
+    if not captions:
+        return []
+    full_text = " ".join(c["word"] for c in captions)
+    found_moments = []
+
+    for pattern, keyword, reason in INDONESIAN_BROLL_LEXICON:
+        for m in re.finditer(pattern, full_text, re.IGNORECASE):
+            char_pos = m.start()
+            cum_len = 0
+            word_idx = 0
+            for idx, c in enumerate(captions):
+                w_len = len(c["word"]) + 1
+                if cum_len <= char_pos < cum_len + w_len:
+                    word_idx = idx
+                    break
+                cum_len += w_len
+
+            start_t = max(0.0, float(captions[word_idx]["start"]))
+            end_t = min(max_duration, start_t + 2.5)
+            q_start = max(0, word_idx - 1)
+            q_end = min(len(captions), word_idx + 3)
+            quote_str = " ".join(captions[i]["word"] for i in range(q_start, q_end))
+            quote_str = re.sub(r'[,.!?"]', '', quote_str).strip()
+
+            found_moments.append({
+                "start_sec": round(start_t, 1),
+                "end_sec": round(end_t, 1),
+                "keyword": keyword,
+                "quote": quote_str,
+                "reason": reason
+            })
+
+    found_moments.sort(key=lambda x: x["start_sec"])
+    selected = []
+    for item in found_moments:
+        overlap = any(abs(item["start_sec"] - s["start_sec"]) < 2.0 or item["keyword"] == s["keyword"] for s in selected)
+        if not overlap:
+            selected.append(item)
+        if len(selected) >= 3:
+            break
+    return selected
+
+
 @app.post("/api/broll/suggest")
 async def suggest_broll_moments(req: BrollSuggestRequest, request: Request):
     """Analyze clip transcript and suggest 1-3 visual B-roll moments with timestamps and keywords."""
@@ -4813,26 +4895,48 @@ async def suggest_broll_moments(req: BrollSuggestRequest, request: Request):
     api_key = await resolve_gemini(request)
     suggestions = []
 
+    full_transcript = " ".join(c['word'] for c in captions)
+
     if api_key:
         try:
             from google import genai
             client = genai.Client(api_key=api_key)
             model_name = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
-            transcript_text = " ".join(f"[{c['start']}-{c['end']}s] {c['word']}" for c in captions[:150])
-            prompt = f"""You are a professional viral short-form video editor for TikTok, YouTube Shorts, and Instagram Reels.
-Analyze this clip transcript with timestamps (total duration {duration_sec:.1f}s):
-{transcript_text}
 
-Identify 1 to 3 moments where inserting a visual B-roll / stock video cutaway (duration between 1.5s and 3.5s) would most effectively boost retention, illustrate a concept, or add excitement.
+            timestamps_preview = " ".join(f"[{c['start']}s: {c['word']}]" for c in captions[:120])
+            prompt = f"""You are an elite short-form video editor (TikTok/Reels/Shorts).
+Analyze this Indonesian spoken clip transcript (duration {duration_sec:.1f}s):
+FULL SENTENCE: "{full_transcript}"
 
-Return ONLY a JSON object:
+TIMESTAMPS:
+{timestamps_preview}
+
+TASK:
+Identify 1 to 3 moments where inserting a visual B-roll / stock footage cutaway (duration 1.5s - 3.5s) will directly illustrate what the speaker is saying (actions, objects, emotional reactions, or physical settings).
+
+STRICT RULES:
+1. HIGH VISUAL RELEVANCE TO SPOKEN WORDS:
+   - Identify concrete actions and nouns mentioned by the speaker.
+   - Example: if speaker mentions "di make up, punya codet... disuruh ngeliat kaca", suggest:
+     * Keyword: "makeup artist applying cosmetics" or "face scar detail"
+     * Keyword: "person looking into mirror reflection"
+   - DO NOT suggest generic unrelated topics (e.g. do not suggest 'technology' or 'nature' unless the speaker actually talks about them).
+2. STOCK SEARCH KEYWORDS:
+   - Provide 2 to 4 simple, highly descriptive English keywords that search well on Pexels/Shutterstock stock video libraries.
+3. LANGUAGE & CONTEXT:
+   - The transcript is conversational/colloquial Indonesian.
+   - `quote`: Quote the spoken words from the transcript that triggered this suggestion.
+   - `reason`: Explanation in Indonesian of why this visual matches the spoken words.
+
+Return JSON in this exact schema:
 {{
   "suggestions": [
     {{
       "start_sec": 2.5,
       "end_sec": 5.0,
-      "keyword": "1-2 English search terms for stock video (e.g. 'coding terminal', 'crypto growth', 'money cash', 'stressed person')",
-      "reason": "Penjelasan singkat dalam Bahasa Indonesia mengapa visual ini pas"
+      "keyword": "person looking into mirror reflection",
+      "quote": "disuruh ngeliat kaca",
+      "reason": "Visual orang sedang melihat cermin memperkuat narasi pembicara"
     }}
   ]
 }}
@@ -4849,15 +4953,20 @@ Ensure start_sec >= 0.0 and end_sec <= {duration_sec:.1f}.
         except Exception as e:
             print(f"⚠️ Gemini broll suggest error: {e}")
 
+    # If Gemini didn't return suggestions (missing key or error), use the Indonesian visual lexicon matcher
     if not suggestions:
-        # Fallback heuristic: choose an engaging early moment
-        mid = max(1.0, duration_sec * 0.25)
+        suggestions = _match_indonesian_broll_lexicon(captions, duration_sec)
+
+    # If still empty, create an initial hook suggestion
+    if not suggestions:
+        mid = max(1.0, duration_sec * 0.2)
         suggestions = [
             {
                 "start_sec": round(mid, 1),
                 "end_sec": round(min(duration_sec, mid + 2.5), 1),
-                "keyword": "technology",
-                "reason": "Momen awal untuk menarik perhatian visual penonton (visual retention hook)"
+                "keyword": "cinematic action focus",
+                "quote": full_transcript[:35] + "...",
+                "reason": "Momen awal untuk menarik perhatian visual penonton (visual hook)"
             }
         ]
 
