@@ -33,8 +33,6 @@ export default function ShortsThumbnailModal({
   onIntroApplied = null,
   inputFilename = null,
 }) {
-  if (!isOpen) return null;
-
   // Settings State
   const [selectedColor, setSelectedColor] = useState(COLOR_PRESETS[0]);
   const [pillText, setPillText] = useState(() => initialTitle ? initialTitle.slice(0, 15) : 'Earn Money');

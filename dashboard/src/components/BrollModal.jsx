@@ -27,8 +27,6 @@ export default function BrollModal({
   onBrollApplied,
   geminiApiKey = '',
 }) {
-  if (!isOpen) return null;
-
   // Tabs
   const [activeTab, setActiveTab] = useState('stock'); // 'stock' | 'upload' | 'ai'
 
@@ -273,9 +271,14 @@ export default function BrollModal({
     setApplySuccess(false);
 
     try {
+      const firstStart = momentsPayload[0]?.start_time ?? 0.0;
+      const lastEnd = momentsPayload[momentsPayload.length - 1]?.end_time ?? 5.0;
+
       const payload = {
         job_id: jobId,
         clip_index: clipIndex,
+        start_time: firstStart,
+        end_time: lastEnd,
         input_filename: inputFilename || null,
         moments: momentsPayload,
       };
@@ -288,7 +291,13 @@ export default function BrollModal({
 
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        throw new Error(err.detail || 'Gagal menerapkan B-Roll ke video');
+        let errorMsg = 'Gagal menerapkan B-Roll ke video';
+        if (Array.isArray(err.detail)) {
+          errorMsg = err.detail.map(d => `${d.loc?.slice(-1)[0] || 'field'}: ${d.msg}`).join(', ');
+        } else if (typeof err.detail === 'string') {
+          errorMsg = err.detail;
+        }
+        throw new Error(errorMsg);
       }
 
       const data = await res.json();
@@ -400,7 +409,13 @@ export default function BrollModal({
 
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        throw new Error(err.detail || 'Gagal menerapkan B-Roll ke video');
+        let errorMsg = 'Gagal menerapkan B-Roll ke video';
+        if (Array.isArray(err.detail)) {
+          errorMsg = err.detail.map(d => `${d.loc?.slice(-1)[0] || 'field'}: ${d.msg}`).join(', ');
+        } else if (typeof err.detail === 'string') {
+          errorMsg = err.detail;
+        }
+        throw new Error(errorMsg);
       }
 
       const data = await res.json();
@@ -909,6 +924,10 @@ export default function BrollModal({
                               <img
                                 src={thumbImg}
                                 alt={vid?.title || 'B-Roll'}
+                                onError={(e) => {
+                                  e.target.onerror = null;
+                                  e.target.style.display = 'none';
+                                }}
                                 className="w-full h-full object-cover"
                               />
                               <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
