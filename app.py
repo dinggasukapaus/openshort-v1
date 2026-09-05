@@ -32,6 +32,7 @@ from pydantic import BaseModel
 from s3_uploader import upload_job_artifacts, list_all_clips, upload_actor_to_s3, list_actor_gallery, upload_video_to_gallery, list_video_gallery
 import recut
 import layout_ranges
+import httpx
 
 load_dotenv()
 
@@ -4606,6 +4607,433 @@ async def add_thumbnail_intro(req: ThumbnailIntroRequest, request: Request):
     return {
         "success": True,
         "new_video_url": new_video_url,
+    }
+
+
+# --- B-Roll Studio & Stock Inserter ---
+
+class BrollSearchRequest(BaseModel):
+    query: str = "technology"
+    orientation: str = "portrait"
+    page: int = 1
+    per_page: int = 15
+
+
+class BrollSuggestRequest(BaseModel):
+    job_id: str
+    clip_index: int
+
+
+class BrollApplyRequest(BaseModel):
+    job_id: str
+    clip_index: int
+    broll_source: str = "stock"  # "stock", "upload", "url"
+    broll_url: Optional[str] = None
+    broll_base64: Optional[str] = None
+    broll_filename: Optional[str] = None
+    start_time: float
+    end_time: float
+    transition: str = "dissolve"  # "dissolve" or "cut"
+    transition_duration: float = 0.3
+    broll_volume: float = 0.0
+    input_filename: Optional[str] = None
+
+
+CURATED_BROLL_STOCK = [
+    {
+        "id": "stock-tech-1",
+        "title": "Futuristic Cyber Matrix",
+        "category": "ai_tech",
+        "image": "https://images.pexels.com/photos/373543/pexels-photo-373543.jpeg?auto=compress&cs=tinysrgb&w=600",
+        "preview_url": "https://assets.mixkit.co/videos/preview/mixkit-circuit-board-details-and-glowing-circuits-40348-large.mp4",
+        "duration": 12,
+        "photographer": "Mixkit Royalty Free",
+        "photographer_url": "https://mixkit.co"
+    },
+    {
+        "id": "stock-business-1",
+        "title": "Stock Market Growth",
+        "category": "business",
+        "image": "https://images.pexels.com/photos/6801874/pexels-photo-6801874.jpeg?auto=compress&cs=tinysrgb&w=600",
+        "preview_url": "https://assets.mixkit.co/videos/preview/mixkit-financial-indicators-on-a-digital-screen-40349-large.mp4",
+        "duration": 10,
+        "photographer": "Mixkit Royalty Free",
+        "photographer_url": "https://mixkit.co"
+    },
+    {
+        "id": "stock-coding-1",
+        "title": "Hacker Terminal Typing",
+        "category": "coding",
+        "image": "https://images.pexels.com/photos/546819/pexels-photo-546819.jpeg?auto=compress&cs=tinysrgb&w=600",
+        "preview_url": "https://assets.mixkit.co/videos/preview/mixkit-hands-of-a-programmer-typing-on-a-keyboard-40356-large.mp4",
+        "duration": 15,
+        "photographer": "Mixkit Royalty Free",
+        "photographer_url": "https://mixkit.co"
+    },
+    {
+        "id": "stock-nature-1",
+        "title": "Sunset Mountain Clouds",
+        "category": "nature",
+        "image": "https://images.pexels.com/photos/417074/pexels-photo-417074.jpeg?auto=compress&cs=tinysrgb&w=600",
+        "preview_url": "https://assets.mixkit.co/videos/preview/mixkit-aerial-view-of-a-mountain-valley-during-sunset-41480-large.mp4",
+        "duration": 14,
+        "photographer": "Mixkit Royalty Free",
+        "photographer_url": "https://mixkit.co"
+    },
+    {
+        "id": "stock-reaction-1",
+        "title": "Working Fast on Laptop",
+        "category": "reaction",
+        "image": "https://images.pexels.com/photos/3184292/pexels-photo-3184292.jpeg?auto=compress&cs=tinysrgb&w=600",
+        "preview_url": "https://assets.mixkit.co/videos/preview/mixkit-young-woman-working-on-a-laptop-in-an-office-40350-large.mp4",
+        "duration": 11,
+        "photographer": "Mixkit Royalty Free",
+        "photographer_url": "https://mixkit.co"
+    }
+]
+
+
+@app.get("/api/broll/search")
+async def search_broll_stock(
+    query: str = "technology",
+    orientation: str = "portrait",
+    page: int = 1,
+    per_page: int = 15,
+    request: Request = None,
+    x_pexels_key: Optional[str] = Header(None, alias="X-Pexels-Key")
+):
+    raw_key = x_pexels_key if isinstance(x_pexels_key, str) else None
+    if not raw_key and request and hasattr(request, "headers"):
+        raw_key = request.headers.get("X-Pexels-Key")
+    pexels_key = raw_key or os.environ.get("PEXELS_API_KEY")
+    if pexels_key:
+        try:
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                res = await client.get(
+                    "https://api.pexels.com/videos/search",
+                    params={
+                        "query": query,
+                        "orientation": orientation,
+                        "per_page": min(30, max(1, per_page)),
+                        "page": max(1, page),
+                    },
+                    headers={"Authorization": pexels_key}
+                )
+                if res.status_code == 200:
+                    data = res.json()
+                    results = []
+                    for v in data.get("videos", []):
+                        v_files = v.get("video_files", [])
+                        mp4_files = [f for f in v_files if f.get("file_type") == "video/mp4"]
+                        if not mp4_files:
+                            continue
+                        portrait_files = [f for f in mp4_files if (f.get("height") or 0) >= (f.get("width") or 0)]
+                        chosen = portrait_files[0] if portrait_files else mp4_files[0]
+                        results.append({
+                            "id": v.get("id"),
+                            "duration": v.get("duration", 0),
+                            "image": v.get("image") or (v.get("video_pictures", [{}])[0].get("picture") if v.get("video_pictures") else ""),
+                            "preview_url": chosen.get("link"),
+                            "download_url": chosen.get("link"),
+                            "photographer": v.get("user", {}).get("name", "Pexels Creator"),
+                            "photographer_url": v.get("user", {}).get("url", ""),
+                        })
+                    return {
+                        "results": results,
+                        "total_results": data.get("total_results", len(results)),
+                        "page": data.get("page", 1),
+                        "has_pexels_key": True
+                    }
+        except Exception as e:
+            print(f"⚠️ Pexels search API failed: {e}")
+
+    # Fallback to curated clips matching query or all
+    q_low = query.lower()
+    matched = [c for c in CURATED_BROLL_STOCK if q_low in c["title"].lower() or q_low in c["category"].lower()]
+    if not matched:
+        matched = CURATED_BROLL_STOCK
+    return {
+        "results": matched,
+        "total_results": len(matched),
+        "page": 1,
+        "has_pexels_key": bool(pexels_key)
+    }
+
+
+@app.post("/api/broll/suggest")
+async def suggest_broll_moments(req: BrollSuggestRequest, request: Request):
+    """Analyze clip transcript and suggest 1-3 visual B-roll moments with timestamps and keywords."""
+    await _ensure_job_files(req.job_id, request)
+    if req.job_id not in jobs:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    job = jobs[req.job_id]
+    await _assert_job_owner(request, job)
+    output_dir = os.path.join(OUTPUT_DIR, req.job_id)
+    json_files = glob.glob(os.path.join(output_dir, "*_metadata.json"))
+    if not json_files:
+        raise HTTPException(status_code=404, detail="Metadata not found")
+
+    with open(json_files[0], 'r', encoding='utf-8') as f:
+        data = json.load(f)
+
+    clips = data.get('shorts', [])
+    if req.clip_index >= len(clips):
+        raise HTTPException(status_code=404, detail="Clip not found")
+
+    clip_data = clips[req.clip_index]
+    transcript = data.get('transcript', {})
+    recipe_segments = (clip_data.get('recipe') or {}).get('segments')
+    if recipe_segments:
+        transcript = recut.virtual_transcript(transcript, recipe_segments)
+        clip_start, clip_end = 0.0, recut.total_duration(recipe_segments)
+    else:
+        clip_start = clip_data.get('start', 0)
+        clip_end = clip_data.get('end', 0)
+
+    captions = []
+    for segment in transcript.get('segments', []):
+        for word_info in segment.get('words', []):
+            if word_info['end'] > clip_start and word_info['start'] < clip_end:
+                captions.append({
+                    "word": word_info.get('word', '').strip(),
+                    "start": round(max(0.0, word_info['start'] - clip_start), 2),
+                    "end": round(max(0.0, word_info['end'] - clip_start), 2)
+                })
+
+    duration_sec = clip_end - clip_start
+    if not captions:
+        return {"suggestions": []}
+
+    api_key = await resolve_gemini(request)
+    suggestions = []
+
+    if api_key:
+        try:
+            from google import genai
+            client = genai.Client(api_key=api_key)
+            model_name = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
+            transcript_text = " ".join(f"[{c['start']}-{c['end']}s] {c['word']}" for c in captions[:150])
+            prompt = f"""You are a professional viral short-form video editor for TikTok, YouTube Shorts, and Instagram Reels.
+Analyze this clip transcript with timestamps (total duration {duration_sec:.1f}s):
+{transcript_text}
+
+Identify 1 to 3 moments where inserting a visual B-roll / stock video cutaway (duration between 1.5s and 3.5s) would most effectively boost retention, illustrate a concept, or add excitement.
+
+Return ONLY a JSON object:
+{{
+  "suggestions": [
+    {{
+      "start_sec": 2.5,
+      "end_sec": 5.0,
+      "keyword": "1-2 English search terms for stock video (e.g. 'coding terminal', 'crypto growth', 'money cash', 'stressed person')",
+      "reason": "Penjelasan singkat dalam Bahasa Indonesia mengapa visual ini pas"
+    }}
+  ]
+}}
+Ensure start_sec >= 0.0 and end_sec <= {duration_sec:.1f}.
+"""
+            res = client.models.generate_content(
+                model=model_name,
+                contents=prompt,
+                config={"response_mime_type": "application/json"}
+            )
+            raw_text = res.text.strip() if hasattr(res, "text") and res.text else "{}"
+            parsed = json.loads(raw_text)
+            suggestions = parsed.get("suggestions", [])
+        except Exception as e:
+            print(f"⚠️ Gemini broll suggest error: {e}")
+
+    if not suggestions:
+        # Fallback heuristic: choose an engaging early moment
+        mid = max(1.0, duration_sec * 0.25)
+        suggestions = [
+            {
+                "start_sec": round(mid, 1),
+                "end_sec": round(min(duration_sec, mid + 2.5), 1),
+                "keyword": "technology",
+                "reason": "Momen awal untuk menarik perhatian visual penonton (visual retention hook)"
+            }
+        ]
+
+    return {
+        "suggestions": suggestions,
+        "clip_duration": duration_sec,
+        "word_count": len(captions)
+    }
+
+
+@app.post("/api/broll/apply")
+async def apply_broll_to_clip(req: BrollApplyRequest, request: Request):
+    """Burn a B-Roll video/image overlay onto the clip with seamless transition and audio preservation."""
+    await require_managed_entitlement(request)
+    await _ensure_job_files(req.job_id, request)
+    if req.job_id not in jobs:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    job = jobs[req.job_id]
+    await _assert_job_owner(request, job)
+    output_dir = os.path.join(OUTPUT_DIR, req.job_id)
+    json_files = glob.glob(os.path.join(output_dir, "*_metadata.json"))
+    if not json_files:
+        raise HTTPException(status_code=404, detail="Metadata not found")
+
+    with open(json_files[0], 'r', encoding='utf-8') as f:
+        data = json.load(f)
+
+    clips = data.get('shorts', [])
+    if req.clip_index >= len(clips):
+        raise HTTPException(status_code=404, detail="Clip not found")
+
+    clip_data = clips[req.clip_index]
+
+    if req.input_filename:
+        filename = os.path.basename(req.input_filename)
+    else:
+        filename = clip_data.get('video_url', '').split('/')[-1]
+        if not filename:
+            base_name = os.path.basename(json_files[0]).replace('_metadata.json', '')
+            filename = f"{base_name}_clip_{req.clip_index+1}.mp4"
+
+    input_path = os.path.join(output_dir, filename)
+    if not os.path.exists(input_path):
+        raise HTTPException(status_code=404, detail=f"Base video file not found: {input_path}")
+
+    # Prepare B-Roll media file
+    temp_files_to_clean = []
+    now_ms = int(time.time() * 1000)
+    temp_broll_path = os.path.join(output_dir, f"temp_broll_{now_ms}.mp4")
+
+    try:
+        if req.broll_base64:
+            header, encoded = req.broll_base64.split(",", 1) if "," in req.broll_base64 else ("", req.broll_base64)
+            raw_bytes = base64.b64decode(encoded)
+            is_image = header.startswith("data:image") or (len(raw_bytes) > 8 and (raw_bytes[:8].startswith(b"\x89PNG\r\n\x1a\n") or raw_bytes[:2] == b"\xff\xd8"))
+            if is_image:
+                temp_broll_path = os.path.join(output_dir, f"temp_broll_{now_ms}.png")
+            with open(temp_broll_path, "wb") as f:
+                f.write(raw_bytes)
+            temp_files_to_clean.append(temp_broll_path)
+        elif req.broll_url:
+            async with httpx.AsyncClient(timeout=45.0, follow_redirects=True) as client:
+                res = await client.get(req.broll_url)
+                res.raise_for_status()
+                content_type = res.headers.get("content-type", "")
+                is_image = "image" in content_type or req.broll_url.lower().endswith(('.png', '.jpg', '.jpeg', '.webp'))
+                if is_image:
+                    temp_broll_path = os.path.join(output_dir, f"temp_broll_{now_ms}.png")
+                with open(temp_broll_path, "wb") as f:
+                    f.write(res.content)
+            temp_files_to_clean.append(temp_broll_path)
+        else:
+            raise HTTPException(status_code=400, detail="Missing B-roll media (broll_url or broll_base64 required)")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to prepare B-roll media: {e}")
+
+    from ffmpeg_utils import get_ffmpeg_bin
+    ffmpeg_bin = get_ffmpeg_bin()
+
+    bstart = max(0.0, float(req.start_time))
+    bend = max(bstart + 0.5, float(req.end_time))
+    bdur = bend - bstart
+    fade_d = min(float(req.transition_duration or 0.3), bdur / 3.0)
+    transition = (req.transition or "dissolve").lower()
+
+    is_img = temp_broll_path.lower().endswith(('.png', '.jpg', '.jpeg', '.webp'))
+
+    if is_img:
+        if transition == "dissolve" and fade_d > 0.05:
+            filter_str = (
+                f"[1:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,fps=30,setsar=1,"
+                f"fade=t=in:st={bstart:.2f}:d={fade_d:.2f}:alpha=1,"
+                f"fade=t=out:st={bend - fade_d:.2f}:d={fade_d:.2f}:alpha=1[broll_v];"
+                f"[0:v][broll_v]overlay=x=0:y=0:enable='between(t,{bstart:.2f},{bend:.2f})':eof_action=pass[vout]"
+            )
+        else:
+            filter_str = (
+                f"[1:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,fps=30,setsar=1[broll_v];"
+                f"[0:v][broll_v]overlay=x=0:y=0:enable='between(t,{bstart:.2f},{bend:.2f})':eof_action=pass[vout]"
+            )
+        input_args = [
+            "-i", input_path,
+            "-loop", "1", "-t", str(bend + 2.0), "-i", temp_broll_path
+        ]
+    else:
+        if transition == "dissolve" and fade_d > 0.05:
+            filter_str = (
+                f"[1:v]setpts=PTS-STARTPTS+{bstart:.2f}/TB,scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,fps=30,setsar=1,"
+                f"fade=t=in:st={bstart:.2f}:d={fade_d:.2f}:alpha=1,"
+                f"fade=t=out:st={bend - fade_d:.2f}:d={fade_d:.2f}:alpha=1[broll_v];"
+                f"[0:v][broll_v]overlay=x=0:y=0:enable='between(t,{bstart:.2f},{bend:.2f})':eof_action=pass[vout]"
+            )
+        else:
+            filter_str = (
+                f"[1:v]setpts=PTS-STARTPTS+{bstart:.2f}/TB,scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,fps=30,setsar=1[broll_v];"
+                f"[0:v][broll_v]overlay=x=0:y=0:enable='between(t,{bstart:.2f},{bend:.2f})':eof_action=pass[vout]"
+            )
+        input_args = [
+            "-i", input_path,
+            "-stream_loop", "-1", "-i", temp_broll_path
+        ]
+
+    output_filename = f"broll_{int(time.time())}_{filename}"
+    output_path = os.path.join(output_dir, output_filename)
+
+    if req.broll_volume > 0.01 and not is_img:
+        filter_str += f";[1:a]volume={float(req.broll_volume):.2f}[ba];[0:a][ba]amix=inputs=2:duration=first:dropout_transition=0[aout]"
+        cmd = [
+            ffmpeg_bin, "-y",
+            *input_args,
+            "-filter_complex", filter_str,
+            "-map", "[vout]",
+            "-map", "[aout]",
+            "-c:v", "libx264", "-pix_fmt", "yuv420p", "-preset", "fast", "-crf", "18",
+            "-c:a", "aac", "-b:a", "192k",
+            output_path
+        ]
+    else:
+        cmd = [
+            ffmpeg_bin, "-y",
+            *input_args,
+            "-filter_complex", filter_str,
+            "-map", "[vout]",
+            "-map", "0:a?",
+            "-c:v", "libx264", "-pix_fmt", "yuv420p", "-preset", "fast", "-crf", "18",
+            "-c:a", "copy",
+            output_path
+        ]
+
+    try:
+        subprocess.run(cmd, capture_output=True, text=True, check=True)
+    except subprocess.CalledProcessError as e:
+        print(f"❌ B-Roll burn error: {e.stderr}")
+        raise HTTPException(status_code=500, detail=f"FFmpeg error: {e.stderr[-300:]}")
+    finally:
+        for tf in temp_files_to_clean:
+            if os.path.exists(tf):
+                try: os.remove(tf)
+                except Exception: pass
+
+    new_video_url = f"/videos/{req.job_id}/{output_filename}"
+    if req.clip_index < len(job['result']['clips']):
+        job['result']['clips'][req.clip_index]['video_url'] = new_video_url
+
+    try:
+        if req.clip_index < len(clips):
+            clips[req.clip_index]['video_url'] = new_video_url
+            data['shorts'] = clips
+            with open(json_files[0], 'w', encoding='utf-8') as f:
+                json.dump(data, f, indent=4)
+    except Exception as e:
+        print(f"⚠️ Failed to update metadata.json with b-roll: {e}")
+
+    _archive_clip_edit_bg(req.job_id, req.clip_index, output_filename)
+
+    return {
+        "success": True,
+        "new_video_url": new_video_url
     }
 
 

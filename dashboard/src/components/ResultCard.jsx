@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Download, Share2, Instagram, Youtube, Video, AlertCircle, Loader2, Copy, Check, Wand2, Type, Calendar, Languages, FileText, Link2, Scissors, Crosshair, TrendingUp, Shield, Star, Sparkles, FastForward, Camera, Pencil, X } from 'lucide-react';
+import { Download, Share2, Instagram, Youtube, Video, AlertCircle, Loader2, Copy, Check, Wand2, Type, Calendar, Languages, FileText, Link2, Scissors, Crosshair, TrendingUp, Shield, Star, Sparkles, FastForward, Camera, Pencil, X, Film } from 'lucide-react';
 import { getApiUrl } from '../config';
 import { apiFetch } from '../lib/api';
 import SubtitleModal from './SubtitleModal';
 import TranslateModal from './TranslateModal';
 import ShortsThumbnailModal from './ShortsThumbnailModal';
+import BrollModal from './BrollModal';
 import Modal from './ui/Modal';
 import SegmentedControl from './ui/SegmentedControl';
 import WatermarkModal, { watermarkNoticeDismissed } from './WatermarkModal';
@@ -51,6 +52,7 @@ export default function ResultCard({ clip, index, jobId, durable, uploadPostKey,
     const [showDescModal, setShowDescModal] = useState(false);
     const [showSubtitleModal, setShowSubtitleModal] = useState(false);
     const [showThumbnailModal, setShowThumbnailModal] = useState(false);
+    const [showBrollModal, setShowBrollModal] = useState(false);
     const [showWatermarkModal, setShowWatermarkModal] = useState(false);
     const [selectedNiche, setSelectedNiche] = useState('general');
     const { plan } = useAuth();
@@ -61,7 +63,7 @@ export default function ResultCard({ clip, index, jobId, durable, uploadPostKey,
     // subtitled file (double-subtitle bug).
     const stripBurns = (filename) => {
         let f = filename || '', prev;
-        do { prev = f; f = f.replace(/^subtitled_\d+_/, '').replace(/^hooked_\d+_/, '').replace(/^hook_/, '').replace(/^intro_\d+_/, ''); } while (f !== prev);
+        do { prev = f; f = f.replace(/^subtitled_\d+_/, '').replace(/^hooked_\d+_/, '').replace(/^hook_/, '').replace(/^intro_\d+_/, '').replace(/^broll_\d+_/, ''); } while (f !== prev);
         return f;
     };
     const originalVideoUrl = getApiUrl((clip.video_url || '').replace(/[^/]+$/, stripBurns((clip.video_url || '').split('/').pop())));
@@ -276,7 +278,7 @@ export default function ResultCard({ clip, index, jobId, durable, uploadPostKey,
         let f = filename || '', prev;
         do {
             prev = f;
-            f = f.replace(/^intro_\d+_/, '').replace(/^hooked_\d+_/, '').replace(/^hook_/, '');
+            f = f.replace(/^intro_\d+_/, '').replace(/^broll_\d+_/, '').replace(/^hooked_\d+_/, '').replace(/^hook_/, '');
         } while (f !== prev);
         return f;
     };
@@ -1222,6 +1224,15 @@ export default function ResultCard({ clip, index, jobId, durable, uploadPostKey,
                     </button>
 
                     <button
+                        onClick={() => setShowBrollModal(true)}
+                        className={QUIET_BTN}
+                        title="Studio B-Roll & Footage Inserter (Stock Pexels, Upload, Saran AI)"
+                    >
+                        <Film size={16} className="text-muted group-hover:text-brass transition-colors shrink-0" />
+                        b-roll
+                    </button>
+
+                    <button
                         onClick={() => setShowTranslateModal(true)}
                         disabled={isTranslating}
                         className={QUIET_BTN}
@@ -1454,6 +1465,27 @@ export default function ResultCard({ clip, index, jobId, durable, uploadPostKey,
                 clipIndex={index}
                 inputFilename={cleanThumbFile}
                 onIntroApplied={(newUrl) => {
+                    const serverUrl = getApiUrl(newUrl);
+                    setCurrentVideoUrl(serverUrl);
+                    const newServerFile = newUrl.split('/').pop();
+                    setServerVideoFile(newServerFile);
+                    if (videoRef.current) {
+                        videoRef.current.load();
+                    }
+                    if (onStateChange) {
+                        onStateChange(index, { activeLayers, serverVideoFile: newServerFile });
+                    }
+                }}
+            />
+
+            <BrollModal
+                isOpen={showBrollModal}
+                onClose={() => setShowBrollModal(false)}
+                videoUrl={currentVideoUrl || originalVideoUrl}
+                jobId={jobId}
+                clipIndex={index}
+                inputFilename={serverVideoFile || cleanThumbFile}
+                onBrollApplied={(newUrl) => {
                     const serverUrl = getApiUrl(newUrl);
                     setCurrentVideoUrl(serverUrl);
                     const newServerFile = newUrl.split('/').pop();
