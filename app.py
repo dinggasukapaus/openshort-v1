@@ -4538,6 +4538,12 @@ async def add_thumbnail_intro(req: ThumbnailIntroRequest, request: Request):
     from ffmpeg_utils import get_ffmpeg_bin
     ffmpeg_bin = get_ffmpeg_bin()
 
+    import cv2
+    cap = cv2.VideoCapture(input_path)
+    target_w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)) or 1080
+    target_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)) or 1920
+    cap.release()
+
     duration = max(1.0, float(req.duration_seconds or 2.5))
     fade_duration = 0.5
     fade_start = max(0.1, duration - fade_duration)
@@ -4546,7 +4552,7 @@ async def add_thumbnail_intro(req: ThumbnailIntroRequest, request: Request):
     if sfx_path and os.path.exists(sfx_path):
         vol = max(0.05, min(1.0, float(req.sfx_volume or 0.35)))
         filter_str = (
-            f"[1:v]scale=1080:1920,setsar=1,fade=t=out:st={fade_start:.2f}:d={fade_duration:.2f}:alpha=1[intro];"
+            f"[1:v]scale={target_w}:{target_h},setsar=1,fade=t=out:st={fade_start:.2f}:d={fade_duration:.2f}:alpha=1[intro];"
             f"[0:v][intro]overlay=0:0:eof_action=pass[vout];"
             f"[2:a]volume={vol:.2f}[sfx];"
             f"[0:a][sfx]amix=inputs=2:duration=first:dropout_transition=0[aout]"
@@ -4565,7 +4571,7 @@ async def add_thumbnail_intro(req: ThumbnailIntroRequest, request: Request):
         ]
     else:
         filter_str = (
-            f"[1:v]scale=1080:1920,setsar=1,fade=t=out:st={fade_start:.2f}:d={fade_duration:.2f}:alpha=1[intro];"
+            f"[1:v]scale={target_w}:{target_h},setsar=1,fade=t=out:st={fade_start:.2f}:d={fade_duration:.2f}:alpha=1[intro];"
             f"[0:v][intro]overlay=0:0:eof_action=pass[vout]"
         )
         cmd = [

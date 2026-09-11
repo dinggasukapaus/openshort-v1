@@ -68,6 +68,7 @@ export default function ShortsThumbnailModal({
   const [isBurningIntro, setIsBurningIntro] = useState(false);
   const [introBurnSuccess, setIntroBurnSuccess] = useState(false);
   const [burnError, setBurnError] = useState(null);
+  const [introMode, setIntroMode] = useState('overlay'); // 'overlay' (video tetap jalan) | 'freeze' (cover diam)
 
   // Video Frame Scrubbing
   const videoRef = useRef(null);
@@ -160,31 +161,33 @@ export default function ShortsThumbnailModal({
     return lines;
   };
 
-  // Draw 1080x1920 High-Res Thumbnail
-  const drawCanvas = () => {
-    const canvas = canvasRef.current;
+  // Draw 1080x1920 High-Res Thumbnail / Video Intro
+  const renderThumbnailToCanvas = (targetCanvas, withVideo = true) => {
     const video = videoRef.current;
-    if (!canvas || !video) return;
+    if (!targetCanvas) return;
 
-    const ctx = canvas.getContext('2d');
+    const ctx = targetCanvas.getContext('2d');
     const W = 1080;
     const H = 1920;
-    canvas.width = W;
-    canvas.height = H;
+    targetCanvas.width = W;
+    targetCanvas.height = H;
+    ctx.clearRect(0, 0, W, H);
 
-    // 1. Draw full video frame as background
-    try {
-      const vw = video.videoWidth || W;
-      const vh = video.videoHeight || H;
-      const hRatio = W / vw;
-      const vRatio = H / vh;
-      const ratio = Math.max(hRatio, vRatio);
-      const centerShiftX = (W - vw * ratio) / 2;
-      const centerShiftY = (H - vh * ratio) / 2;
-      ctx.drawImage(video, 0, 0, vw, vh, centerShiftX, centerShiftY, vw * ratio, vh * ratio);
-    } catch (e) {
-      ctx.fillStyle = '#111827';
-      ctx.fillRect(0, 0, W, H);
+    // 1. Draw full video frame as background (if withVideo is true)
+    if (withVideo && video) {
+      try {
+        const vw = video.videoWidth || W;
+        const vh = video.videoHeight || H;
+        const hRatio = W / vw;
+        const vRatio = H / vh;
+        const ratio = Math.max(hRatio, vRatio);
+        const centerShiftX = (W - vw * ratio) / 2;
+        const centerShiftY = (H - vh * ratio) / 2;
+        ctx.drawImage(video, 0, 0, vw, vh, centerShiftX, centerShiftY, vw * ratio, vh * ratio);
+      } catch (e) {
+        ctx.fillStyle = '#111827';
+        ctx.fillRect(0, 0, W, H);
+      }
     }
 
     // 2. Draw Top Colored Banner with Curve
@@ -346,14 +349,22 @@ export default function ShortsThumbnailModal({
     }
   };
 
-  // Download high-resolution PNG
+  const drawCanvas = () => {
+    if (canvasRef.current) {
+      renderThumbnailToCanvas(canvasRef.current, true);
+    }
+  };
+
+  // Download high-resolution PNG cover (always with video frame)
   const handleDownload = () => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!canvasRef.current) return;
     setIsGenerating(true);
 
     try {
-      canvas.toBlob((blob) => {
+      const offscreen = document.createElement('canvas');
+      renderThumbnailToCanvas(offscreen, true);
+
+      offscreen.toBlob((blob) => {
         if (!blob) return;
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -375,15 +386,24 @@ export default function ShortsThumbnailModal({
 
   // Burn thumbnail as 2.5s video intro with audio SFX
   const handleBurnIntro = async () => {
-    const canvas = canvasRef.current;
-    if (!canvas || !jobId) return;
+    if (!canvasRef.current || !jobId) return;
 
     setIsBurningIntro(true);
     setBurnError(null);
     setIntroBurnSuccess(false);
 
     try {
-      const dataUrl = canvas.toDataURL('image/png');
+      let dataUrl;
+      const offscreen = document.createElement('canvas');
+      if (introMode === 'overlay') {
+        // Transparent overlay: only header banner and cards, video plays underneath in real-time
+        renderThumbnailToCanvas(offscreen, false);
+      } else {
+        // Freeze frame: include captured video frame from scrubber
+        renderThumbnailToCanvas(offscreen, true);
+      }
+      dataUrl = offscreen.toDataURL('image/png');
+
       const res = await apiFetch('/api/thumbnail-intro', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -487,6 +507,45 @@ export default function ShortsThumbnailModal({
               <span className="truncate">{burnError}</span>
             </div>
           )}
+
+          {/* Tipe Intro Video Selector */}
+          <div className="w-full mt-3 p-2.5 bg-paper3 rounded-input border border-rule space-y-1.5 text-left">
+            <div className="flex items-center justify-between">
+              <span className="eyebrow text-brass text-[10px]">TIPE INTRO VIDEO</span>
+              <span className="text-[10px] text-muted">2.5 Detik + SFX</span>
+            </div>
+            <div className="grid grid-cols-2 gap-1.5">
+              <button
+                type="button"
+                onClick={() => setIntroMode('overlay')}
+                className={`p-2 rounded text-[11px] font-semibold flex flex-col items-center text-center transition-all cursor-pointer ${
+                  introMode === 'overlay'
+                    ? 'bg-brass/20 text-brass border border-brass shadow-xs'
+                    : 'bg-paper text-muted border border-rule hover:text-ink'
+                }`}
+              >
+                <span>🎬 Overlay Banner</span>
+                <span className="text-[9px] font-normal opacity-80 mt-0.5">Video tetap berjalan</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setIntroMode('freeze')}
+                className={`p-2 rounded text-[11px] font-semibold flex flex-col items-center text-center transition-all cursor-pointer ${
+                  introMode === 'freeze'
+                    ? 'bg-brass/20 text-brass border border-brass shadow-xs'
+                    : 'bg-paper text-muted border border-rule hover:text-ink'
+                }`}
+              >
+                <span>🖼️ Freeze Frame</span>
+                <span className="text-[9px] font-normal opacity-80 mt-0.5">Cover diam 2.5s</span>
+              </button>
+            </div>
+            <p className="text-[10px] text-muted leading-tight">
+              {introMode === 'overlay'
+                ? '✨ Rekomendasi: Banner hook melayang di atas video. Pembicara & video tetap bergerak normal dari detik 0.'
+                : 'Frame video diam selama 2.5 detik sebagai pembuka sebelum video mulai bergerak.'}
+            </p>
+          </div>
 
           {/* Primary Action 1: Burn as Video Intro */}
           <button
