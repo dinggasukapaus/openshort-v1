@@ -5067,6 +5067,12 @@ async def apply_broll_to_clip(req: BrollApplyRequest, request: Request):
     if not os.path.exists(input_path):
         raise HTTPException(status_code=404, detail=f"Base video file not found: {input_path}")
 
+    import cv2
+    cap = cv2.VideoCapture(input_path)
+    target_w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)) or 1080
+    target_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)) or 1920
+    cap.release()
+
     # Determine list of moments to apply (batch or single)
     raw_moments = []
     if req.moments and len(req.moments) > 0:
@@ -5182,32 +5188,33 @@ async def apply_broll_to_clip(req: BrollApplyRequest, request: Request):
         fd = pm["fade_d"]
         trans = pm["transition"]
 
+        scale_filter = f"scale={target_w}:{target_h}:force_original_aspect_ratio=increase,crop={target_w}:{target_h},fps=30,setsar=1"
         if pm["is_img"]:
             input_args.extend(["-loop", "1", "-t", str(e + 2.0), "-i", pm["media_path"]])
             if trans == "dissolve" and fd > 0.05:
                 filters.append(
-                    f"[{in_v}]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,fps=30,setsar=1,"
+                    f"[{in_v}]{scale_filter},"
                     f"fade=t=in:st={s:.2f}:d={fd:.2f}:alpha=1,"
                     f"fade=t=out:st={e - fd:.2f}:d={fd:.2f}:alpha=1[{b_label}];"
                     f"[{prev_v}][{b_label}]overlay=x=0:y=0:enable='between(t,{s:.2f},{e:.2f})':eof_action=pass[{next_v}]"
                 )
             else:
                 filters.append(
-                    f"[{in_v}]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,fps=30,setsar=1[{b_label}];"
+                    f"[{in_v}]{scale_filter}[{b_label}];"
                     f"[{prev_v}][{b_label}]overlay=x=0:y=0:enable='between(t,{s:.2f},{e:.2f})':eof_action=pass[{next_v}]"
                 )
         else:
             input_args.extend(["-stream_loop", "-1", "-i", pm["media_path"]])
             if trans == "dissolve" and fd > 0.05:
                 filters.append(
-                    f"[{in_v}]setpts=PTS-STARTPTS+{s:.2f}/TB,scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,fps=30,setsar=1,"
+                    f"[{in_v}]setpts=PTS-STARTPTS+{s:.2f}/TB,{scale_filter},"
                     f"fade=t=in:st={s:.2f}:d={fd:.2f}:alpha=1,"
                     f"fade=t=out:st={e - fd:.2f}:d={fd:.2f}:alpha=1[{b_label}];"
                     f"[{prev_v}][{b_label}]overlay=x=0:y=0:enable='between(t,{s:.2f},{e:.2f})':eof_action=pass[{next_v}]"
                 )
             else:
                 filters.append(
-                    f"[{in_v}]setpts=PTS-STARTPTS+{s:.2f}/TB,scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,fps=30,setsar=1[{b_label}];"
+                    f"[{in_v}]setpts=PTS-STARTPTS+{s:.2f}/TB,{scale_filter}[{b_label}];"
                     f"[{prev_v}][{b_label}]overlay=x=0:y=0:enable='between(t,{s:.2f},{e:.2f})':eof_action=pass[{next_v}]"
                 )
         prev_v = next_v
