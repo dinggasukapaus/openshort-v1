@@ -4038,6 +4038,425 @@ async def generate_effects_config(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# --- VFX & Audio SFX Studio (Camera Movement, B&W Filter, Synced SFX) ---
+
+class EffectItem(BaseModel):
+    type: str  # "zoom_in", "zoom_out", "punch_in", "zoom_pulse", "bw_moment", "color_pop", "flash", "vignette"
+    start: float
+    end: float
+    strength: Optional[float] = 0.10
+    sfx: Optional[str] = "none"  # "whoosh", "boom", "camera", "pop", "chime", "none"
+    sfx_volume: Optional[float] = 0.40
+    reason: Optional[str] = ""
+
+class EffectsApplyRequest(BaseModel):
+    job_id: str
+    clip_index: int
+    input_filename: Optional[str] = None
+    edits: List[EffectItem]
+    custom_sfx_base64: Optional[str] = None
+
+class EffectsAutoDetectRequest(BaseModel):
+    job_id: str
+    clip_index: int
+    input_filename: Optional[str] = None
+
+
+def apply_effects_to_video(input_path: str, output_path: str, edits: list, output_dir: str, custom_sfx_base64: Optional[str] = None):
+    from ffmpeg_utils import get_ffmpeg_bin
+    ffmpeg_bin = get_ffmpeg_bin()
+    import cv2
+    import edit_builder
+
+    cap = cv2.VideoCapture(input_path)
+    target_w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)) or 1080
+    target_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)) or 1920
+    fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
+    frame_count = cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0
+    duration = frame_count / fps if fps > 0 else 30.0
+    cap.release()
+
+    edits_dicts = [e.dict() if hasattr(e, "dict") else dict(e) for e in edits]
+    vf_str, applied = edit_builder.build_filter_string(
+        edits_dicts, duration=duration, fps=fps, width=target_w, height=target_h, has_captions=False
+    )
+
+    temp_custom_sfx = None
+    temp_sfx_files = []
+    if custom_sfx_base64:
+        try:
+            _, sfx_enc = custom_sfx_base64.split(",", 1) if "," in custom_sfx_base64 else ("", custom_sfx_base64)
+            sfx_bytes = base64.b64decode(sfx_enc)
+            temp_custom_sfx = os.path.join(output_dir, f"temp_custom_sfx_{int(time.time()*1000)}.wav")
+            with open(temp_custom_sfx, "wb") as f:
+                f.write(sfx_bytes)
+            temp_sfx_files.append(temp_custom_sfx)
+        except Exception as e:
+            print(f"⚠️ Failed to decode custom SFX: {e}")
+
+    cmd = [ffmpeg_bin, "-y", "-i", input_path]
+    sfx_filters = []
+    sfx_count = 0
+
+    for e in edits_dicts:
+        sfx_name = e.get("sfx")
+        if not sfx_name or sfx_name == "none":
+            continue
+        sfx_file_path = None
+        if sfx_name == "custom" and temp_custom_sfx and os.path.exists(temp_custom_sfx):
+            sfx_file_path = temp_custom_sfx
+        else:
+            candidate = os.path.join("assets", "sfx", f"{sfx_name}.wav")
+            if os.path.exists(candidate):
+                sfx_file_path = candidate
+        if sfx_file_path:
+            cmd.extend(["-i", sfx_file_path])
+            in_idx = 1 + sfx_count
+            del_ms = max(0, int(round(float(e.get("start", 0)) * 1000)))
+            vol = max(0.05, min(1.0, float(e.get("sfx_volume", 0.40))))
+            sfx_filters.append(f"[{in_idx}:a]adelay={del_ms}|{del_ms},volume={vol:.2f}[sfx_{sfx_count}]")
+            sfx_count += 1
+
+    if vf_str:
+        v_part = f"[0:v]{vf_str},setsar=1[vout]"
+    else:
+        v_part = "[0:v]null[vout]"
+
+    has_audio = True
+    try:
+        probe_cmd = ["ffprobe", "-v", "error", "-select_streams", "a:0", "-show_entries", "stream=codec_name", "-of", "csv=p=0", input_path]
+        audio_codec = subprocess.check_output(probe_cmd).decode().strip()
+        has_audio = bool(audio_codec)
+    except Exception:
+        has_audio = True
+
+    if sfx_count > 0:
+        if has_audio:
+            a_inputs = "[0:a]" + "".join(f"[sfx_{i}]" for i in range(sfx_count))
+            a_part = f"{a_inputs}amix=inputs={1 + sfx_count}:duration=first:dropout_transition=0[aout]"
+        else:
+            a_inputs = "".join(f"[sfx_{i}]" for i in range(sfx_count))
+            a_part = f"{a_inputs}amix=inputs={sfx_count}:dropout_transition=0[aout]"
+
+        full_filter = f"{v_part};" + ";".join(sfx_filters) + f";{a_part}"
+        cmd.extend([
+            "-filter_complex", full_filter,
+            "-map", "[vout]",
+            "-map", "[aout]",
+            "-c:v", "libx264", "-pix_fmt", "yuv420p", "-preset", "fast", "-crf", "18",
+            "-c:a", "aac", "-b:a", "192k",
+            "-movflags", "+faststart",
+            output_path
+        ])
+    else:
+        cmd.extend([
+            "-filter_complex", v_part,
+            "-map", "[vout]",
+            "-map", "0:a?",
+            "-c:v", "libx264", "-pix_fmt", "yuv420p", "-preset", "fast", "-crf", "18",
+            "-c:a", "copy",
+            "-movflags", "+faststart",
+            output_path
+        ])
+
+    try:
+        subprocess.run(cmd, capture_output=True, text=True, check=True)
+    except subprocess.CalledProcessError as err:
+        print(f"❌ Effects FFmpeg error: {err.stderr}")
+        raise RuntimeError(f"FFmpeg error: {err.stderr[-300:]}")
+    finally:
+        for tf in temp_sfx_files:
+            if os.path.exists(tf):
+                try: os.remove(tf)
+                except Exception: pass
+
+    return applied
+
+
+@app.post("/api/effects/auto-detect")
+async def auto_detect_effects(req: EffectsAutoDetectRequest, request: Request):
+    """Auto-detect optimal camera movements, dramatic B&W moments, and synced SFX based on audio and duration."""
+    await _ensure_job_files(req.job_id, request)
+    if req.job_id not in jobs:
+        raise HTTPException(status_code=404, detail="Job not found")
+    job = jobs[req.job_id]
+    await _assert_job_owner(request, job)
+    output_dir = os.path.join(OUTPUT_DIR, req.job_id)
+    json_files = glob.glob(os.path.join(output_dir, "*_metadata.json"))
+    if not json_files:
+        raise HTTPException(status_code=404, detail="Metadata not found")
+    with open(json_files[0], 'r', encoding='utf-8') as f:
+        meta_data = json.load(f)
+    clips = meta_data.get('shorts', [])
+    if req.clip_index >= len(clips):
+        raise HTTPException(status_code=404, detail="Clip not found")
+    clip_data = clips[req.clip_index]
+
+    if req.input_filename:
+        filename = os.path.basename(req.input_filename)
+    else:
+        filename = clip_data.get('video_url', '').split('/')[-1]
+    input_path = os.path.join(output_dir, filename)
+    if not os.path.exists(input_path):
+        raise HTTPException(status_code=404, detail="Video file not found")
+
+    import cv2
+    cap = cv2.VideoCapture(input_path)
+    fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
+    frame_count = cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0
+    duration = frame_count / fps if fps > 0 else 30.0
+    cap.release()
+
+    recommended = []
+    # 1. Opening Hook: Zoom In (0s - 3s) + whoosh
+    hook_end = min(3.0, max(1.5, duration * 0.2))
+    recommended.append({
+        "type": "zoom_in",
+        "start": 0.0,
+        "end": round(hook_end, 2),
+        "strength": 0.12,
+        "sfx": "whoosh",
+        "sfx_volume": 0.40,
+        "reason": "Opening viral hook push-in"
+    })
+
+    # 2. Climax / Punchline: Check audio beats
+    import punch_in
+    beats = []
+    try:
+        beats = punch_in.emphasis_times(input_path, duration)
+    except Exception:
+        pass
+
+    mid_start = 0.40 * duration
+    mid_end = min(mid_start + 2.5, duration - 4.0)
+    if beats:
+        candidate_beats = [b for b in beats if 3.5 <= b <= duration - 4.0]
+        if candidate_beats:
+            mid_start = candidate_beats[0]
+            mid_end = min(mid_start + 2.0, duration - 3.5)
+
+    if mid_end > mid_start + 0.5:
+        recommended.append({
+            "type": "punch_in",
+            "start": round(mid_start, 2),
+            "end": round(mid_end, 2),
+            "strength": 0.10,
+            "sfx": "pop",
+            "sfx_volume": 0.35,
+            "reason": "Emphasis punchline beat"
+        })
+
+    # 3. Dramatic B&W moment (if duration >= 12s)
+    if duration >= 12.0:
+        bw_start = max(mid_end + 1.5, 0.65 * duration)
+        bw_end = min(bw_start + 2.5, duration - 2.5)
+        if bw_end - bw_start >= 1.5:
+            recommended.append({
+                "type": "bw_moment",
+                "start": round(bw_start, 2),
+                "end": round(bw_end, 2),
+                "strength": 0.8,
+                "sfx": "boom",
+                "sfx_volume": 0.45,
+                "reason": "Dramatic monochrome moment"
+            })
+
+    # 4. Outro Pullback: Zoom Out (last 2.5 - 3.0s)
+    if duration >= 8.0:
+        out_start = max(0.0, duration - 2.8)
+        recommended.append({
+            "type": "zoom_out",
+            "start": round(out_start, 2),
+            "end": round(duration, 2),
+            "strength": 0.12,
+            "sfx": "whoosh",
+            "sfx_volume": 0.35,
+            "reason": "Outro pull-back transition"
+        })
+
+    return {"duration": round(duration, 2), "recommended_edits": recommended}
+
+
+@app.post("/api/effects/apply")
+async def apply_effects_endpoint(req: EffectsApplyRequest, request: Request):
+    """Apply visual effects (Zoom In, Zoom Out, Punch In, B&W) and synced SFX to a single clip."""
+    await require_managed_entitlement(request)
+    await _ensure_job_files(req.job_id, request)
+    if req.job_id not in jobs:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    job = jobs[req.job_id]
+    await _assert_job_owner(request, job)
+    output_dir = os.path.join(OUTPUT_DIR, req.job_id)
+    json_files = glob.glob(os.path.join(output_dir, "*_metadata.json"))
+    if not json_files:
+        raise HTTPException(status_code=404, detail="Metadata not found")
+
+    with open(json_files[0], 'r', encoding='utf-8') as f:
+        data = json.load(f)
+
+    clips = data.get('shorts', [])
+    if req.clip_index >= len(clips):
+        raise HTTPException(status_code=404, detail="Clip not found")
+
+    clip_data = clips[req.clip_index]
+
+    if req.input_filename:
+        filename = os.path.basename(req.input_filename)
+    else:
+        filename = clip_data.get('video_url', '').split('/')[-1]
+        if not filename:
+            base_name = os.path.basename(json_files[0]).replace('_metadata.json', '')
+            filename = f"{base_name}_clip_{req.clip_index+1}.mp4"
+
+    clean_filename = re.sub(r'^vfx_\d+_', '', filename)
+    clean_path = os.path.join(output_dir, clean_filename)
+    if os.path.exists(clean_path):
+        filename = clean_filename
+        input_path = clean_path
+    else:
+        input_path = os.path.join(output_dir, filename)
+
+    if not os.path.exists(input_path):
+        raise HTTPException(status_code=404, detail=f"Base video not found: {input_path}")
+
+    output_filename = f"vfx_{int(time.time())}_{filename}"
+    output_path = os.path.join(output_dir, output_filename)
+
+    try:
+        applied = apply_effects_to_video(
+            input_path=input_path,
+            output_path=output_path,
+            edits=req.edits,
+            output_dir=output_dir,
+            custom_sfx_base64=req.custom_sfx_base64
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+    new_video_url = f"/videos/{req.job_id}/{output_filename}"
+    if req.clip_index < len(job['result']['clips']):
+        job['result']['clips'][req.clip_index]['video_url'] = new_video_url
+
+    try:
+        if req.clip_index < len(clips):
+            clips[req.clip_index]['video_url'] = new_video_url
+            data['shorts'] = clips
+            with open(json_files[0], 'w', encoding='utf-8') as f:
+                json.dump(data, f, indent=4)
+    except Exception as e:
+        print(f"⚠️ Failed to update metadata.json with vfx: {e}")
+
+    _archive_clip_edit_bg(req.job_id, req.clip_index, output_filename)
+
+    return {
+        "success": True,
+        "new_video_url": new_video_url,
+        "applied_edits": len(applied)
+    }
+
+
+@app.post("/api/effects/apply-all")
+async def apply_effects_all_endpoint(req: EffectsApplyRequest, request: Request):
+    """Apply the specified effects recipe proportionally to all clips in the job."""
+    await require_managed_entitlement(request)
+    await _ensure_job_files(req.job_id, request)
+    if req.job_id not in jobs:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    job = jobs[req.job_id]
+    await _assert_job_owner(request, job)
+    output_dir = os.path.join(OUTPUT_DIR, req.job_id)
+    json_files = glob.glob(os.path.join(output_dir, "*_metadata.json"))
+    if not json_files:
+        raise HTTPException(status_code=404, detail="Metadata not found")
+
+    with open(json_files[0], 'r', encoding='utf-8') as f:
+        data = json.load(f)
+
+    clips = data.get('shorts', [])
+    if not clips:
+        raise HTTPException(status_code=400, detail="No clips available to update")
+
+    import cv2
+    ref_clip = clips[req.clip_index] if req.clip_index < len(clips) else clips[0]
+    ref_filename = ref_clip.get('video_url', '').split('/')[-1]
+    ref_clean = re.sub(r'^vfx_\d+_', '', ref_filename)
+    ref_path = os.path.join(output_dir, ref_clean)
+    if not os.path.exists(ref_path):
+        ref_path = os.path.join(output_dir, ref_filename)
+
+    ref_cap = cv2.VideoCapture(ref_path)
+    ref_fps = ref_cap.get(cv2.CAP_PROP_FPS) or 30.0
+    ref_frames = ref_cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0
+    ref_duration = max(1.0, ref_frames / ref_fps if ref_fps > 0 else 30.0)
+    ref_cap.release()
+
+    updated_count = 0
+    now_ts = int(time.time())
+
+    for idx, clip in enumerate(clips):
+        c_filename = clip.get('video_url', '').split('/')[-1]
+        c_clean = re.sub(r'^vfx_\d+_', '', c_filename)
+        c_path = os.path.join(output_dir, c_clean)
+        if not os.path.exists(c_path):
+            c_path = os.path.join(output_dir, c_filename)
+        if not os.path.exists(c_path):
+            continue
+
+        c_cap = cv2.VideoCapture(c_path)
+        c_fps = c_cap.get(cv2.CAP_PROP_FPS) or 30.0
+        c_frames = c_cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0
+        c_dur = max(1.0, c_frames / c_fps if c_fps > 0 else 30.0)
+        c_cap.release()
+
+        ratio = c_dur / ref_duration
+        c_edits = []
+        for e in req.edits:
+            ed = e.dict() if hasattr(e, "dict") else dict(e)
+            c_start = min(c_dur, max(0.0, float(ed.get("start", 0)) * ratio))
+            c_end = min(c_dur, max(c_start + 0.2, float(ed.get("end", 0)) * ratio))
+            c_edits.append({
+                **ed,
+                "start": round(c_start, 2),
+                "end": round(c_end, 2)
+            })
+
+        out_fname = f"vfx_{now_ts}_{c_clean}"
+        out_fpath = os.path.join(output_dir, out_fname)
+
+        try:
+            apply_effects_to_video(
+                input_path=c_path,
+                output_path=out_fpath,
+                edits=c_edits,
+                output_dir=output_dir,
+                custom_sfx_base64=req.custom_sfx_base64
+            )
+            new_url = f"/videos/{req.job_id}/{out_fname}"
+            clip['video_url'] = new_url
+            if idx < len(job['result']['clips']):
+                job['result']['clips'][idx]['video_url'] = new_url
+            _archive_clip_edit_bg(req.job_id, idx, out_fname)
+            updated_count += 1
+        except Exception as err:
+            print(f"⚠️ Failed to apply vfx to clip {idx}: {err}")
+
+    try:
+        data['shorts'] = clips
+        with open(json_files[0], 'w', encoding='utf-8') as f:
+            json.dump(data, f, indent=4)
+    except Exception as e:
+        print(f"⚠️ Failed to write metadata.json after apply-all: {e}")
+
+    return {
+        "success": True,
+        "updated_clips": updated_count,
+        "total_clips": len(clips)
+    }
+
+
 @app.post("/api/subtitle")
 async def add_subtitles(req: SubtitleRequest, request: Request):
     await require_managed_entitlement(request)

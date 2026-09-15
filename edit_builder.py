@@ -13,9 +13,10 @@ Stdlib-only so it stays unit-testable without FFmpeg or the Gemini SDK.
 # Per-type hard limits. "zoom" types re-frame the picture and are dropped
 # entirely when the input already has burned-in captions/hooks.
 EFFECT_LIMITS = {
-    "zoom_in":    {"zoom": True,  "max_strength": 0.15, "default_strength": 0.10},
-    "punch_in":   {"zoom": True,  "max_strength": 0.15, "default_strength": 0.09},
-    "zoom_pulse": {"zoom": True,  "max_strength": 0.10, "default_strength": 0.07},
+    "zoom_in":    {"zoom": True,  "max_strength": 0.20, "default_strength": 0.10},
+    "zoom_out":   {"zoom": True,  "max_strength": 0.20, "default_strength": 0.10},
+    "punch_in":   {"zoom": True,  "max_strength": 0.20, "default_strength": 0.09},
+    "zoom_pulse": {"zoom": True,  "max_strength": 0.15, "default_strength": 0.07},
     "color_pop":  {"zoom": False, "max_strength": 1.0,  "default_strength": 0.5},
     "bw_moment":  {"zoom": False, "max_strength": 1.0,  "default_strength": 1.0},
     "flash":      {"zoom": False, "max_strength": 1.0,  "default_strength": 1.0},
@@ -101,6 +102,9 @@ def _zoom_term(entry, fps):
     if entry["type"] == "zoom_in":
         # Linear ramp from 0 to full strength across the segment.
         return f"{strength:.4f}*clip((on-{start_frame})/{span},0,1)*{gate}"
+    if entry["type"] == "zoom_out":
+        # Linear ramp from full strength down to 0 across the segment.
+        return f"{strength:.4f}*(1-clip((on-{start_frame})/{span},0,1))*{gate}"
     if entry["type"] == "zoom_pulse":
         # Triangular in-and-out peaking mid-segment.
         mid = (start_frame + end_frame) / 2.0
@@ -138,6 +142,9 @@ def build_filter_string(edits, duration, fps, width, height, has_captions=False)
             )
         elif entry["type"] == "bw_moment":
             color_filters.append(f"hue=s=0:enable='between(t,{start:.2f},{end:.2f})'")
+            if strength > 0.5:
+                contrast = 1.0 + 0.25 * (strength - 0.5) * 2.0
+                color_filters.append(f"eq=contrast={contrast:.2f}:enable='between(t,{start:.2f},{end:.2f})'")
         elif entry["type"] == "flash":
             flash_end = min(start + FLASH_SECONDS, end)
             color_filters.append(f"eq=brightness=0.35:enable='between(t,{start:.2f},{flash_end:.2f})'")
@@ -149,8 +156,8 @@ def build_filter_string(edits, duration, fps, width, height, has_captions=False)
         z_expr = "1+" + "+".join(zoom_terms)
         parts.append(
             f"zoompan=z='{z_expr}'"
-            f":x='iw/2-(iw/zoom)/2'"
-            f":y='ih*{ZOOM_CENTER_Y}-(ih/zoom)/2'"
+            f":x='max(0,min(iw-iw/zoom,iw/2-(iw/zoom)/2))'"
+            f":y='max(0,min(ih-ih/zoom,ih*{ZOOM_CENTER_Y}-(ih/zoom)/2))'"
             f":d=1:fps={fps:g}:s={width}x{height}"
         )
 
