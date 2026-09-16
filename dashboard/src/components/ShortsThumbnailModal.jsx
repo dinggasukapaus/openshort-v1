@@ -1,24 +1,116 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Modal from './ui/Modal';
-import { Download, Sparkles, Image, RefreshCw, X, Upload, Check, Type, Eye, Trash2, Search, Sliders, Volume2, Play, VolumeX, AlertCircle, Loader2, Music, Clapperboard } from 'lucide-react';
+import { 
+  Download, Sparkles, Image, RefreshCw, X, Upload, Check, Type, 
+  Eye, Trash2, Search, Sliders, Volume2, Play, VolumeX, AlertCircle, 
+  Loader2, Music, Clapperboard, Layout, Palette, Tag, ShieldAlert,
+  Flame, Radio, Film, Layers, Award
+} from 'lucide-react';
 import { apiFetch } from '../lib/api';
 
-const COLOR_PRESETS = [
-  { id: 'meta-blue', name: 'Facebook Blue', color: '#1877F2', text: '#FFFFFF', pillBg: '#FFFFFF', pillText: '#1877F2' },
-  { id: 'youtube-red', name: 'Viral Red', color: '#E50914', text: '#FFFFFF', pillBg: '#FFFFFF', pillText: '#E50914' },
-  { id: 'hormozi-gold', name: 'Hormozi Gold', color: '#F59E0B', text: '#000000', pillBg: '#000000', pillText: '#F59E0B' },
-  { id: 'emerald-green', name: 'Finance Emerald', color: '#059669', text: '#FFFFFF', pillBg: '#FFFFFF', pillText: '#059669' },
-  { id: 'cyber-purple', name: 'Cyber Purple', color: '#7C3AED', text: '#FFFFFF', pillBg: '#FFFFFF', pillText: '#7C3AED' },
-  { id: 'dark-slate', name: 'Dark Slate', color: '#18181B', text: '#FFFFFF', pillBg: '#27272A', pillText: '#F4F4F5' },
+// 7 Viral Layout Templates
+const TEMPLATE_PRESETS = [
+  { 
+    id: 'meta-card', 
+    name: 'Meta Creator', 
+    icon: '📱', 
+    badge: 'Populer',
+    desc: 'Header lengkung modern + Search pill + Kartu pengumuman bawah (ala Facebook/Meta Monetization)' 
+  },
+  { 
+    id: 'hormozi-bold', 
+    name: 'Bold Hormozi', 
+    icon: '💥', 
+    badge: 'Viral TikTok',
+    desc: 'Teks raksasa kontras tinggi dengan stroke hitam tebal + vignette gelap penarik atensi' 
+  },
+  { 
+    id: 'breaking-news', 
+    name: 'Breaking News', 
+    icon: '🚨', 
+    badge: 'Urgent',
+    desc: 'Ticker bar merah berkedip "BREAKING NEWS" + bingkai kotak peringatan investigasi' 
+  },
+  { 
+    id: 'podcast-quote', 
+    name: 'Podcast Quote', 
+    icon: '🎙️', 
+    badge: 'Talkshow',
+    desc: 'Kutipan dialog dengan ornamen tanda petik besar + badge narasumber / tamu' 
+  },
+  { 
+    id: 'cinematic-minimal', 
+    name: 'Cinematic Vox', 
+    icon: '🎬', 
+    badge: 'Dokumenter',
+    desc: 'Letterbox sinematik + gradasi hitam bawah + tipografi elegan berkelas' 
+  },
+  { 
+    id: 'sticker-hook', 
+    name: 'Viral Sticker', 
+    icon: '🏷️', 
+    badge: 'Trendy',
+    desc: 'Stiker miring pop-art + stabilo / highlighter di belakang kata kunci penting' 
+  },
+  { 
+    id: 'split-comparison', 
+    name: 'VS Comparison', 
+    icon: '⚔️', 
+    badge: 'Komparasi',
+    desc: 'Dua warna kontras terpisah dengan emblem lingkaran "VS" di tengah' 
+  },
 ];
 
+// 16 Modern Viral Color Palettes
+const COLOR_PRESETS = [
+  { id: 'meta-blue', name: 'Facebook Blue', color: '#1877F2', text: '#FFFFFF', pillBg: '#FFFFFF', pillText: '#1877F2', accent: '#0D65D9' },
+  { id: 'youtube-red', name: 'Viral Red', color: '#E50914', text: '#FFFFFF', pillBg: '#FFFFFF', pillText: '#E50914', accent: '#B20710' },
+  { id: 'hormozi-gold', name: 'Hormozi Amber', color: '#F59E0B', text: '#000000', pillBg: '#000000', pillText: '#F59E0B', accent: '#D97706' },
+  { id: 'emerald-green', name: 'Finance Emerald', color: '#059669', text: '#FFFFFF', pillBg: '#FFFFFF', pillText: '#059669', accent: '#047857' },
+  { id: 'cyber-purple', name: 'Cyber Purple', color: '#7C3AED', text: '#FFFFFF', pillBg: '#FFFFFF', pillText: '#7C3AED', accent: '#6D28D9' },
+  { id: 'dark-slate', name: 'Stealth Black', color: '#18181B', text: '#FFFFFF', pillBg: '#27272A', pillText: '#F4F4F5', accent: '#09090B' },
+  { id: 'neon-pink', name: 'Neon Pink', color: '#EC4899', text: '#FFFFFF', pillBg: '#FFFFFF', pillText: '#EC4899', accent: '#DB2777' },
+  { id: 'electric-cyan', name: 'Electric Cyan', color: '#06B6D4', text: '#000000', pillBg: '#000000', pillText: '#06B6D4', accent: '#0891B2' },
+  { id: 'sunset-orange', name: 'TikTok Orange', color: '#FF5722', text: '#FFFFFF', pillBg: '#FFFFFF', pillText: '#FF5722', accent: '#E64A19' },
+  { id: 'volt-lime', name: 'Volt Lime', color: '#84CC16', text: '#000000', pillBg: '#000000', pillText: '#84CC16', accent: '#65A30D' },
+  { id: 'earthy-olive', name: 'Earthy Olive', color: '#4D7C0F', text: '#FFFFFF', pillBg: '#FFFFFF', pillText: '#4D7C0F', accent: '#3F6212' },
+  { id: 'luxe-bronze', name: 'Luxe Bronze', color: '#78350F', text: '#FFFFFF', pillBg: '#FEF3C7', pillText: '#78350F', accent: '#92400E' },
+  { id: 'pastel-lavender', name: 'Pastel Lavender', color: '#A855F7', text: '#FFFFFF', pillBg: '#FFFFFF', pillText: '#A855F7', accent: '#9333EA' },
+  { id: 'ocean-navy', name: 'Deep Navy', color: '#0F172A', text: '#FFFFFF', pillBg: '#1E293B', pillText: '#38BDF8', accent: '#0284C7' },
+  { id: 'crimson-warning', name: 'Crimson Warning', color: '#991B1B', text: '#FFFFFF', pillBg: '#FEF2F2', pillText: '#991B1B', accent: '#7F1D1D' },
+  { id: 'monochrome-noir', name: 'Monochrome Noir', color: '#000000', text: '#FFFFFF', pillBg: '#FFFFFF', pillText: '#000000', accent: '#27272A' },
+];
+
+// 1-Click Viral Stickers / Badges
+const STICKER_PRESETS = [
+  { id: 'none', label: 'Tanpa Stiker', emoji: '' },
+  { id: 'viral', label: '🔥 VIRAL!', emoji: '🔥' },
+  { id: 'penting', label: '🚨 PENTING!', emoji: '🚨' },
+  { id: 'tips', label: '💡 TIPS & TRIK', emoji: '💡' },
+  { id: 'cuan', label: '💰 CUAN GURIH', emoji: '💰' },
+  { id: 'shocking', label: '😱 SHOCKING!', emoji: '😱' },
+  { id: 'rahasia', label: '🤫 RAHASIA!', emoji: '🤫' },
+  { id: 'wajib', label: '✅ WAJIB NONTON', emoji: '✅' },
+  { id: 'stop', label: '❌ JANGAN LAKUKAN', emoji: '❌' },
+  { id: 'podcast', label: '🎙️ PODCAST', emoji: '🎙️' },
+];
+
+// Typography Styles
+const FONT_OPTIONS = [
+  { id: 'impact', name: 'Modern Impact', family: '-apple-system, BlinkMacSystemFont, "Montserrat", "Impact", sans-serif' },
+  { id: 'condensed', name: 'Condensed Punch', family: '"Anton", "Bebas Neue", -apple-system, sans-serif' },
+  { id: 'clean', name: 'Clean Geometric', family: '-apple-system, BlinkMacSystemFont, "Poppins", "Inter", sans-serif' },
+  { id: 'serif', name: 'Cinematic Serif', family: '"Playfair Display", "Georgia", serif' },
+];
+
+// Copyright-Free Audio SFX
 const SFX_PRESETS = [
-  { id: 'chime', name: 'iPhone / Chime', icon: '🔔', desc: 'Denting notifikasi smartphone (paling viral menghentikan scroll)' },
-  { id: 'whoosh', name: 'Fast Whoosh', icon: '💨', desc: 'Hembusan angin cepat modern ala TikTok/Reels' },
+  { id: 'chime', name: 'iPhone / Chime', icon: '🔔', desc: 'Denting notifikasi smartphone viral' },
+  { id: 'whoosh', name: 'Fast Whoosh', icon: '💨', desc: 'Hembusan angin cepat modern' },
   { id: 'boom', name: 'Cinematic Boom', icon: '💥', desc: 'Dentuman bass elegan berkelas' },
   { id: 'camera', name: 'Camera Click', icon: '📸', desc: 'Klik jepretan kamera dua ketukan' },
-  { id: 'pop', name: 'Bubble Pop', icon: '🎈', desc: 'Letupan gelembung renyah dan santai' },
-  { id: 'none', name: 'Tanpa SFX', icon: '🔇', desc: 'Hanya audio suara pembicara asli' },
+  { id: 'pop', name: 'Bubble Pop', icon: '🎈', desc: 'Letupan gelembung renyah' },
+  { id: 'none', name: 'Tanpa SFX', icon: '🔇', desc: 'Hanya audio asli klip' },
 ];
 
 export default function ShortsThumbnailModal({
@@ -33,21 +125,31 @@ export default function ShortsThumbnailModal({
   onIntroApplied = null,
   inputFilename = null,
 }) {
-  // Settings State
+  // Template & Theme State
+  const [selectedTemplate, setSelectedTemplate] = useState('meta-card');
   const [selectedColor, setSelectedColor] = useState(COLOR_PRESETS[0]);
-  const [pillText, setPillText] = useState(() => initialTitle ? initialTitle.slice(0, 15) : 'Earn Money');
-  const [headline, setHeadline] = useState(initialTitle || 'Introducing Facebook Content Monetization');
+  const [selectedFont, setSelectedFont] = useState(FONT_OPTIONS[0]);
+  const [selectedSticker, setSelectedSticker] = useState('viral');
+
+  // Text State
+  const [pillText, setPillText] = useState(() => initialTitle ? initialTitle.slice(0, 18) : 'Trending Now');
+  const [headline, setHeadline] = useState(initialTitle || 'Cara Menghasilkan Uang dari Konten Video');
   const [headlineSize, setHeadlineSize] = useState(56);
   const [showBottomCard, setShowBottomCard] = useState(true);
   const [cardEyebrow, setCardEyebrow] = useState('ANNOUNCEMENTS');
   const [cardText, setCardText] = useState(
-    initialHook || initialTitle || "Earn Money from More of your Content: Introducing Facebook's New Monetization Program"
+    initialHook || initialTitle || "Pelajari strategi viral algoritma terbaru untuk mempercepat pertumbuhan akun Anda."
   );
-  
-  // Arch / Curve style
+
+  // Curve Style for Meta template
   const [curveStyle, setCurveStyle] = useState('arch'); // 'arch', 'wave', 'slant', 'straight'
 
-  // Channel Logo State (Saved to localStorage)
+  // Visual Contrast & Readability Enhancers
+  const [vignetteDim, setVignetteDim] = useState(25); // 0 to 80%
+  const [highlightText, setHighlightText] = useState(false); // highlighter marker box
+  const [borderFrame, setBorderFrame] = useState('none'); // 'none', 'white', 'neon', 'letterbox'
+
+  // Channel Logo State (Persisted in localStorage)
   const [channelLogo, setChannelLogo] = useState(() => {
     try {
       return localStorage.getItem('openshorts_channel_logo') || null;
@@ -58,19 +160,18 @@ export default function ShortsThumbnailModal({
   const [logoPlacement, setLogoPlacement] = useState('pill'); // 'pill', 'corner', 'card', 'none'
   const fileInputRef = useRef(null);
 
-  // Audio SFX Overlay State
+  // Audio SFX State
   const [selectedSfx, setSelectedSfx] = useState('chime');
   const [sfxVolume, setSfxVolume] = useState(35);
   const [customSfx, setCustomSfx] = useState(null);
-  const sfxInputRef = useRef(null);
 
-  // Burn Video Intro State
+  // Intro Burn State
   const [isBurningIntro, setIsBurningIntro] = useState(false);
   const [introBurnSuccess, setIntroBurnSuccess] = useState(false);
   const [burnError, setBurnError] = useState(null);
-  const [introMode, setIntroMode] = useState('overlay'); // 'overlay' (video tetap jalan) | 'freeze' (cover diam)
+  const [introMode, setIntroMode] = useState('overlay'); // 'overlay' | 'freeze'
 
-  // Video Frame Scrubbing
+  // Video Scrubbing
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const [currentTime, setCurrentTime] = useState(0);
@@ -102,23 +203,19 @@ export default function ShortsThumbnailModal({
     } catch {}
   };
 
-  // Play preview sound
+  // Play audio preview
   const playSfxPreview = (sfxId) => {
     if (sfxId === 'none') return;
     try {
-      let audioUrl = `/sfx/${sfxId}.wav`;
-      if (customSfx && sfxId === 'custom') {
-        audioUrl = customSfx;
-      }
+      const audioUrl = customSfx && sfxId === 'custom' ? customSfx : `/sfx/${sfxId}.wav`;
       const audio = new Audio(audioUrl);
       audio.volume = Math.min(1.0, Math.max(0.05, sfxVolume / 100));
-      audio.play().catch(e => console.log('Audio preview error:', e));
+      audio.play().catch((e) => console.log('Audio preview error:', e));
     } catch (e) {
       console.warn('Audio playback not supported:', e);
     }
   };
 
-  // Video metadata loaded
   const handleLoadedMetadata = () => {
     if (videoRef.current) {
       setDuration(videoRef.current.duration || 30);
@@ -127,19 +224,21 @@ export default function ShortsThumbnailModal({
     }
   };
 
-  // Reload video if videoUrl changes
   useEffect(() => {
     if (videoRef.current && videoUrl) {
       videoRef.current.load();
     }
   }, [videoUrl]);
 
-  // Redraw canvas whenever settings change
   useEffect(() => {
     if (videoLoaded) {
       drawCanvas();
     }
-  }, [selectedColor, pillText, headline, headlineSize, showBottomCard, cardEyebrow, cardText, curveStyle, channelLogo, logoPlacement, currentTime, videoLoaded]);
+  }, [
+    selectedTemplate, selectedColor, selectedFont, selectedSticker, pillText, 
+    headline, headlineSize, showBottomCard, cardEyebrow, cardText, curveStyle, 
+    vignetteDim, highlightText, borderFrame, channelLogo, logoPlacement, currentTime, videoLoaded
+  ]);
 
   // Helper: Text Wrapping
   const wrapText = (ctx, text, maxWidth) => {
@@ -161,7 +260,9 @@ export default function ShortsThumbnailModal({
     return lines;
   };
 
-  // Draw 1080x1920 High-Res Thumbnail / Video Intro
+  // -------------------------------------------------------------
+  // MASTER CANVAS RENDERER (1080x1920)
+  // -------------------------------------------------------------
   const renderThumbnailToCanvas = (targetCanvas, withVideo = true) => {
     const video = videoRef.current;
     if (!targetCanvas) return;
@@ -173,7 +274,7 @@ export default function ShortsThumbnailModal({
     targetCanvas.height = H;
     ctx.clearRect(0, 0, W, H);
 
-    // 1. Draw full video frame as background (if withVideo is true)
+    // 1. Draw Video Frame
     if (withVideo && video) {
       try {
         const vw = video.videoWidth || W;
@@ -190,7 +291,88 @@ export default function ShortsThumbnailModal({
       }
     }
 
-    // 2. Draw Top Colored Banner with Curve
+    // 2. Readability Vignette & Dimmer Overlay
+    if (withVideo && vignetteDim > 0) {
+      ctx.save();
+      const alpha = Math.min(0.85, vignetteDim / 100);
+      // Top and bottom gradient for maximum text clarity
+      const grad = ctx.createLinearGradient(0, 0, 0, H);
+      grad.addColorStop(0, `rgba(0, 0, 0, ${alpha * 0.9})`);
+      grad.addColorStop(0.35, `rgba(0, 0, 0, ${alpha * 0.3})`);
+      grad.addColorStop(0.65, `rgba(0, 0, 0, ${alpha * 0.3})`);
+      grad.addColorStop(1, `rgba(0, 0, 0, ${alpha * 0.95})`);
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, W, H);
+      ctx.restore();
+    }
+
+    // 3. Render Selected Template Layout
+    switch (selectedTemplate) {
+      case 'hormozi-bold':
+        renderTemplateHormozi(ctx, W, H);
+        break;
+      case 'breaking-news':
+        renderTemplateBreakingNews(ctx, W, H);
+        break;
+      case 'podcast-quote':
+        renderTemplatePodcastQuote(ctx, W, H);
+        break;
+      case 'cinematic-minimal':
+        renderTemplateCinematicMinimal(ctx, W, H);
+        break;
+      case 'sticker-hook':
+        renderTemplateStickerHook(ctx, W, H);
+        break;
+      case 'split-comparison':
+        renderTemplateSplitComparison(ctx, W, H);
+        break;
+      case 'meta-card':
+      default:
+        renderTemplateMetaCard(ctx, W, H);
+        break;
+    }
+
+    // 4. Draw Channel Logo in Corner if chosen
+    if (channelLogo && logoPlacement === 'corner') {
+      const logoImg = new window.Image();
+      logoImg.src = channelLogo;
+      if (logoImg.complete) {
+        ctx.save();
+        const logoSize = 110;
+        ctx.shadowColor = 'rgba(0,0,0,0.5)';
+        ctx.shadowBlur = 12;
+        ctx.drawImage(logoImg, W - logoSize - 60, 90, logoSize, logoSize);
+        ctx.restore();
+      }
+    }
+
+    // 5. Border Frame Option
+    if (borderFrame !== 'none') {
+      ctx.save();
+      if (borderFrame === 'white') {
+        ctx.strokeStyle = '#FFFFFF';
+        ctx.lineWidth = 14;
+        ctx.strokeRect(20, 20, W - 40, H - 40);
+      } else if (borderFrame === 'neon') {
+        ctx.strokeStyle = selectedColor.color;
+        ctx.lineWidth = 12;
+        ctx.shadowColor = selectedColor.color;
+        ctx.shadowBlur = 24;
+        ctx.strokeRect(20, 20, W - 40, H - 40);
+      } else if (borderFrame === 'letterbox') {
+        ctx.fillStyle = '#000000';
+        ctx.fillRect(0, 0, W, 80);
+        ctx.fillRect(0, H - 80, W, 80);
+      }
+      ctx.restore();
+    }
+  };
+
+  // -------------------------------------------------------------
+  // TEMPLATE 1: META / FACEBOOK CREATOR CARD
+  // -------------------------------------------------------------
+  const renderTemplateMetaCard = (ctx, W, H) => {
+    // Top colored banner
     ctx.save();
     ctx.fillStyle = selectedColor.color;
     ctx.beginPath();
@@ -216,33 +398,30 @@ export default function ShortsThumbnailModal({
     ctx.fill();
     ctx.restore();
 
-    // 3. Draw Search Pill at Top: [ 🔍 PillText ] (X / Logo)
+    // Search Pill
     const pillY = 110;
     const pillH = 88;
     const pillPadX = 36;
     ctx.save();
-    ctx.font = 'bold 36px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.font = `bold 36px ${selectedFont.family}`;
     const pillTextWidth = ctx.measureText(pillText || 'Topic').width;
     const iconWidth = 50;
     const pillW = Math.max(280, pillTextWidth + iconWidth + pillPadX * 2);
     const pillX = 60;
 
-    // Outer Pill Background
     ctx.fillStyle = selectedColor.pillBg;
     ctx.beginPath();
     ctx.roundRect(pillX, pillY, pillW, pillH, 44);
     ctx.fill();
 
-    // Search Icon 🔍
     ctx.fillStyle = selectedColor.pillText;
     ctx.font = '34px sans-serif';
     ctx.fillText('🔍', pillX + 24, pillY + 56);
 
-    // Pill Text
-    ctx.font = 'bold 36px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.font = `bold 36px ${selectedFont.family}`;
     ctx.fillText(pillText || 'Topic', pillX + 76, pillY + 57);
 
-    // Pill Circle Button (Right side of pill: Close button or Logo)
+    // Pill right button
     const circleBtnX = pillX + pillW + 20;
     const circleBtnY = pillY;
     const circleBtnR = pillH / 2;
@@ -272,22 +451,10 @@ export default function ShortsThumbnailModal({
     }
     ctx.restore();
 
-    // 4. Draw Logo in Corner if selected
-    if (channelLogo && logoPlacement === 'corner') {
-      const logoImg = new window.Image();
-      logoImg.src = channelLogo;
-      if (logoImg.complete) {
-        ctx.save();
-        const logoSize = 110;
-        ctx.drawImage(logoImg, W - logoSize - 60, 100, logoSize, logoSize);
-        ctx.restore();
-      }
-    }
-
-    // 5. Draw Headline Text (Large bold multi-line)
+    // Headline Text
     ctx.save();
     ctx.fillStyle = selectedColor.text;
-    ctx.font = `800 ${headlineSize}px -apple-system, BlinkMacSystemFont, "Montserrat", "Poppins", sans-serif`;
+    ctx.font = `800 ${headlineSize}px ${selectedFont.family}`;
     ctx.textBaseline = 'top';
     ctx.textAlign = 'left';
 
@@ -296,7 +463,7 @@ export default function ShortsThumbnailModal({
     const lineSpacing = headlineSize * 1.22;
 
     for (const line of headlineLines) {
-      ctx.shadowColor = 'rgba(0, 0, 0, 0.25)';
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.35)';
       ctx.shadowBlur = 8;
       ctx.shadowOffsetY = 4;
       ctx.fillText(line, 60, headlineY);
@@ -304,18 +471,18 @@ export default function ShortsThumbnailModal({
     }
     ctx.restore();
 
-    // 6. Draw Bottom Announcement Card (White card from reference)
+    // Bottom Announcement Card
     if (showBottomCard) {
       ctx.save();
       const cardX = 60;
       const cardY = 1260;
       const cardW = W - 120;
       const cardH = 540;
-      const radius = 16;
+      const radius = 20;
 
-      ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';
-      ctx.shadowBlur = 24;
-      ctx.shadowOffsetY = 12;
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.45)';
+      ctx.shadowBlur = 28;
+      ctx.shadowOffsetY = 14;
 
       ctx.fillStyle = '#FFFFFF';
       ctx.beginPath();
@@ -324,11 +491,11 @@ export default function ShortsThumbnailModal({
       ctx.shadowColor = 'transparent';
 
       ctx.fillStyle = '#111827';
-      ctx.font = '800 24px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+      ctx.font = `800 24px ${selectedFont.family}`;
       ctx.fillText((cardEyebrow || 'ANNOUNCEMENTS').toUpperCase(), cardX + 44, cardY + 60);
 
       ctx.fillStyle = selectedColor.color === '#FFFFFF' ? '#1877F2' : selectedColor.color;
-      ctx.font = '800 46px -apple-system, BlinkMacSystemFont, "Montserrat", "Segoe UI", sans-serif';
+      ctx.font = `800 46px ${selectedFont.family}`;
       ctx.textBaseline = 'top';
 
       const cardLines = wrapText(ctx, cardText, cardW - 88);
@@ -349,13 +516,422 @@ export default function ShortsThumbnailModal({
     }
   };
 
+  // -------------------------------------------------------------
+  // TEMPLATE 2: BOLD HORMOZI / MRBEAST HIGH-IMPACT
+  // -------------------------------------------------------------
+  const renderTemplateHormozi = (ctx, W, H) => {
+    ctx.save();
+    // Top viral sticker badge
+    const stickerObj = STICKER_PRESETS.find((s) => s.id === selectedSticker);
+    if (stickerObj && stickerObj.id !== 'none') {
+      const badgeText = stickerObj.label;
+      ctx.font = `900 36px ${selectedFont.family}`;
+      const badgeW = ctx.measureText(badgeText).width + 60;
+      const badgeX = (W - badgeW) / 2;
+      const badgeY = 140;
+
+      ctx.fillStyle = selectedColor.color;
+      ctx.shadowColor = 'rgba(0,0,0,0.6)';
+      ctx.shadowBlur = 18;
+      ctx.beginPath();
+      ctx.roundRect(badgeX, badgeY, badgeW, 76, 38);
+      ctx.fill();
+
+      ctx.fillStyle = selectedColor.text;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(badgeText, W / 2, badgeY + 38);
+    }
+
+    // Huge Hormozi Headline in center-top area
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const bigSize = Math.max(68, Math.min(102, headlineSize * 1.35));
+    ctx.font = `900 ${bigSize}px ${selectedFont.family}`;
+
+    const lines = wrapText(ctx, headline.toUpperCase(), W - 120);
+    const totalH = lines.length * bigSize * 1.18;
+    let startY = 380 + (400 - totalH) / 2;
+
+    lines.forEach((line, i) => {
+      const y = startY + i * bigSize * 1.18;
+
+      // Optional highlighter box behind words
+      if (highlightText) {
+        const lineW = ctx.measureText(line).width + 40;
+        ctx.fillStyle = i % 2 === 0 ? selectedColor.color : '#FFFFFF';
+        ctx.fillRect((W - lineW) / 2, y - bigSize * 0.55, lineW, bigSize * 1.05);
+      }
+
+      // Thick black stroke for 100% pop
+      ctx.strokeStyle = '#000000';
+      ctx.lineWidth = 14;
+      ctx.lineJoin = 'miter';
+      ctx.miterLimit = 2;
+      ctx.strokeText(line, W / 2, y);
+
+      // Fill text
+      ctx.fillStyle = highlightText
+        ? (i % 2 === 0 ? selectedColor.text : '#000000')
+        : (i % 2 === 0 ? selectedColor.color : '#FFFFFF');
+
+      ctx.shadowColor = 'rgba(0,0,0,0.85)';
+      ctx.shadowBlur = 24;
+      ctx.shadowOffsetY = 8;
+      ctx.fillText(line, W / 2, y);
+    });
+
+    // Bottom Hook Card / Subtitle
+    if (showBottomCard && cardText) {
+      const bCardW = W - 140;
+      const bCardH = 220;
+      const bCardX = 70;
+      const bCardY = H - 340;
+
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+      ctx.strokeStyle = selectedColor.color;
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.roundRect(bCardX, bCardY, bCardW, bCardH, 24);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = '#FFFFFF';
+      ctx.font = `800 36px ${selectedFont.family}`;
+      ctx.textAlign = 'center';
+      const cLines = wrapText(ctx, cardText, bCardW - 60);
+      cLines.slice(0, 3).forEach((cl, idx) => {
+        ctx.fillText(cl, W / 2, bCardY + 60 + idx * 46);
+      });
+    }
+    ctx.restore();
+  };
+
+  // -------------------------------------------------------------
+  // TEMPLATE 3: BREAKING NEWS / VIRAL ALERT
+  // -------------------------------------------------------------
+  const renderTemplateBreakingNews = (ctx, W, H) => {
+    ctx.save();
+    // Top Breaking News Banner Bar
+    ctx.fillStyle = '#E50914';
+    ctx.fillRect(0, 0, W, 140);
+
+    // Blinking dot + Title
+    ctx.fillStyle = '#FFFFFF';
+    ctx.beginPath();
+    ctx.arc(80, 70, 16, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = `900 48px ${selectedFont.family}`;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('BREAKING NEWS', 120, 70);
+
+    ctx.font = `700 28px ${selectedFont.family}`;
+    ctx.textAlign = 'right';
+    ctx.fillStyle = '#FEF08A';
+    ctx.fillText('🔴 LIVE UPDATE', W - 60, 70);
+
+    // News Chyron Box for Headline
+    const boxY = 180;
+    const boxW = W - 100;
+    const boxX = 50;
+    const lines = wrapText(ctx, headline, boxW - 80);
+    const boxH = Math.max(220, lines.length * 70 + 80);
+
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.92)';
+    ctx.strokeStyle = '#E50914';
+    ctx.lineWidth = 8;
+    ctx.shadowColor = 'rgba(0,0,0,0.6)';
+    ctx.shadowBlur = 20;
+    ctx.beginPath();
+    ctx.roundRect(boxX, boxY, boxW, boxH, 16);
+    ctx.fill();
+    ctx.stroke();
+
+    // Headline inside box
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = `800 ${headlineSize}px ${selectedFont.family}`;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+
+    lines.forEach((l, i) => {
+      ctx.fillText(l, boxX + 40, boxY + 40 + i * (headlineSize * 1.2));
+    });
+
+    // Bottom Ticker Banner
+    if (showBottomCard) {
+      const tickH = 130;
+      const tickY = H - 220;
+
+      ctx.fillStyle = selectedColor.color;
+      ctx.fillRect(0, tickY, W, tickH);
+
+      ctx.fillStyle = '#000000';
+      ctx.fillRect(0, tickY, 200, tickH);
+
+      ctx.fillStyle = '#FFFFFF';
+      ctx.font = `900 32px ${selectedFont.family}`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('INFO :', 100, tickY + tickH / 2);
+
+      ctx.fillStyle = selectedColor.text;
+      ctx.font = `700 34px ${selectedFont.family}`;
+      ctx.textAlign = 'left';
+      ctx.fillText(cardText.slice(0, 55) + '…', 230, tickY + tickH / 2);
+    }
+    ctx.restore();
+  };
+
+  // -------------------------------------------------------------
+  // TEMPLATE 4: PODCAST / TALKSHOW QUOTE
+  // -------------------------------------------------------------
+  const renderTemplatePodcastQuote = (ctx, W, H) => {
+    ctx.save();
+    // Top Host / Podcast Tag
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
+    ctx.beginPath();
+    ctx.roundRect(60, 100, 360, 70, 35);
+    ctx.fill();
+
+    ctx.fillStyle = selectedColor.color;
+    ctx.font = `800 28px ${selectedFont.family}`;
+    ctx.textBaseline = 'middle';
+    ctx.fillText('🎙️ ' + (pillText || 'PODCAST HIGHLIGHT'), 86, 135);
+
+    // Large Quotation Mark
+    ctx.fillStyle = selectedColor.color;
+    ctx.font = '900 160px Georgia, serif';
+    ctx.textBaseline = 'top';
+    ctx.fillText('“', 60, 220);
+
+    // Quote Content Box
+    const quoteY = 320;
+    const quoteW = W - 140;
+    ctx.font = `800 ${Math.max(48, headlineSize)}px ${selectedFont.family}`;
+    ctx.fillStyle = '#FFFFFF';
+    ctx.shadowColor = 'rgba(0,0,0,0.8)';
+    ctx.shadowBlur = 16;
+
+    const qLines = wrapText(ctx, headline, quoteW);
+    let qY = quoteY;
+    qLines.forEach((ql) => {
+      ctx.fillText(ql, 80, qY);
+      qY += headlineSize * 1.25;
+    });
+
+    // Speaker Name Card at Bottom
+    if (showBottomCard) {
+      const cardY = H - 360;
+      ctx.fillStyle = 'rgba(24, 24, 27, 0.92)';
+      ctx.strokeStyle = selectedColor.color;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.roundRect(60, cardY, W - 120, 220, 20);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = selectedColor.color;
+      ctx.font = `900 32px ${selectedFont.family}`;
+      ctx.fillText(cardEyebrow || 'NARASUMBER / GUEST', 100, cardY + 60);
+
+      ctx.fillStyle = '#FFFFFF';
+      ctx.font = `600 34px ${selectedFont.family}`;
+      const cLines = wrapText(ctx, cardText, W - 200);
+      cLines.slice(0, 2).forEach((cl, i) => {
+        ctx.fillText(cl, 100, cardY + 115 + i * 44);
+      });
+    }
+    ctx.restore();
+  };
+
+  // -------------------------------------------------------------
+  // TEMPLATE 5: CINEMATIC MINIMAL / VOX
+  // -------------------------------------------------------------
+  const renderTemplateCinematicMinimal = (ctx, W, H) => {
+    ctx.save();
+    // Top Widescreen Letterbox Bar
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(0, 0, W, 100);
+    ctx.fillRect(0, H - 100, W, 100);
+
+    // Minimalist Category Tag
+    ctx.fillStyle = selectedColor.color;
+    ctx.font = `800 30px ${selectedFont.family}`;
+    ctx.textAlign = 'left';
+    ctx.fillText('• ' + (pillText || 'DOKUMENTER').toUpperCase(), 70, 150);
+
+    // Bottom Third Gradient
+    const bGrad = ctx.createLinearGradient(0, H - 850, 0, H);
+    bGrad.addColorStop(0, 'rgba(0,0,0,0)');
+    bGrad.addColorStop(0.5, 'rgba(0,0,0,0.85)');
+    bGrad.addColorStop(1, '#000000');
+    ctx.fillStyle = bGrad;
+    ctx.fillRect(0, H - 850, W, 850);
+
+    // Headline in Bottom Third
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = `800 ${headlineSize}px ${selectedFont.family}`;
+    ctx.textBaseline = 'bottom';
+    ctx.textAlign = 'left';
+
+    const lines = wrapText(ctx, headline, W - 140);
+    let curY = H - 280;
+    for (let i = lines.length - 1; i >= 0; i--) {
+      ctx.fillText(lines[i], 70, curY);
+      curY -= headlineSize * 1.2;
+    }
+
+    // Subtitle text line
+    if (showBottomCard && cardText) {
+      ctx.fillStyle = selectedColor.color;
+      ctx.font = `700 32px ${selectedFont.family}`;
+      ctx.fillText(cardText.slice(0, 60), 70, H - 180);
+    }
+    ctx.restore();
+  };
+
+  // -------------------------------------------------------------
+  // TEMPLATE 6: VIRAL STICKER / TIKTOK HOOK
+  // -------------------------------------------------------------
+  const renderTemplateStickerHook = (ctx, W, H) => {
+    ctx.save();
+    // Tilted Sticker Badge
+    const stickerObj = STICKER_PRESETS.find((s) => s.id === selectedSticker);
+    const stickerLabel = stickerObj && stickerObj.id !== 'none' ? stickerObj.label : '🔥 WAJIB TAHU!';
+
+    ctx.save();
+    ctx.translate(140, 160);
+    ctx.rotate((-5 * Math.PI) / 180);
+
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(-10, -10, 360, 80);
+
+    ctx.fillStyle = selectedColor.color;
+    ctx.fillRect(-16, -16, 360, 80);
+
+    ctx.fillStyle = selectedColor.text;
+    ctx.font = `900 36px ${selectedFont.family}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(stickerLabel, 164, 24);
+    ctx.restore();
+
+    // Headline with Neon Highlighter Boxes
+    ctx.font = `900 ${headlineSize}px ${selectedFont.family}`;
+    ctx.textBaseline = 'top';
+    ctx.textAlign = 'left';
+
+    const lines = wrapText(ctx, headline, W - 140);
+    let startY = 320;
+
+    lines.forEach((line, idx) => {
+      const lineW = ctx.measureText(line).width + 36;
+      const boxH = headlineSize * 1.25;
+
+      // Drop shadow box
+      ctx.fillStyle = '#000000';
+      ctx.fillRect(74, startY + 6, lineW, boxH);
+
+      // Bright colored marker box
+      ctx.fillStyle = idx % 2 === 0 ? selectedColor.color : '#FFFFFF';
+      ctx.fillRect(70, startY, lineW, boxH);
+
+      // Text inside box
+      ctx.fillStyle = idx % 2 === 0 ? selectedColor.text : '#000000';
+      ctx.fillText(line, 88, startY + (boxH - headlineSize) / 2);
+
+      startY += boxH + 16;
+    });
+
+    // Bottom Callout Sticker
+    if (showBottomCard && cardText) {
+      const calloutY = H - 320;
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.9)';
+      ctx.strokeStyle = '#FFFFFF';
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.roundRect(60, calloutY, W - 120, 180, 24);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = selectedColor.color;
+      ctx.font = `900 32px ${selectedFont.family}`;
+      ctx.textAlign = 'center';
+      ctx.fillText('👉 ' + cardText.slice(0, 48), W / 2, calloutY + 95);
+    }
+    ctx.restore();
+  };
+
+  // -------------------------------------------------------------
+  // TEMPLATE 7: SPLIT COMPARISON (VS)
+  // -------------------------------------------------------------
+  const renderTemplateSplitComparison = (ctx, W, H) => {
+    ctx.save();
+    // Top Banner
+    ctx.fillStyle = selectedColor.color;
+    ctx.fillRect(0, 0, W, 360);
+
+    ctx.fillStyle = selectedColor.text;
+    ctx.font = `900 48px ${selectedFont.family}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText((pillText || 'CARA LAMA vs CARA BARU').toUpperCase(), W / 2, 110);
+
+    ctx.font = `800 ${headlineSize * 0.9}px ${selectedFont.family}`;
+    const topLines = wrapText(ctx, headline, W - 160);
+    topLines.slice(0, 2).forEach((tl, i) => {
+      ctx.fillText(tl, W / 2, 210 + i * (headlineSize * 0.95));
+    });
+
+    // Center "VS" Emblem
+    ctx.fillStyle = '#000000';
+    ctx.beginPath();
+    ctx.arc(W / 2, 360, 68, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = '#FFFFFF';
+    ctx.strokeStyle = selectedColor.color;
+    ctx.lineWidth = 6;
+    ctx.beginPath();
+    ctx.arc(W / 2, 360, 60, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = '#E50914';
+    ctx.font = `900 46px ${selectedFont.family}`;
+    ctx.fillText('VS', W / 2, 362);
+
+    // Bottom Result Banner
+    if (showBottomCard && cardText) {
+      const bH = 260;
+      const bY = H - bH;
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.95)';
+      ctx.fillRect(0, bY, W, bH);
+
+      ctx.fillStyle = '#22C55E';
+      ctx.font = `900 32px ${selectedFont.family}`;
+      ctx.fillText('HASIL REKOMENDASI:', W / 2, bY + 60);
+
+      ctx.fillStyle = '#FFFFFF';
+      ctx.font = `700 36px ${selectedFont.family}`;
+      const bLines = wrapText(ctx, cardText, W - 140);
+      bLines.slice(0, 2).forEach((bl, i) => {
+        ctx.fillText(bl, W / 2, bY + 120 + i * 46);
+      });
+    }
+    ctx.restore();
+  };
+
   const drawCanvas = () => {
     if (canvasRef.current) {
       renderThumbnailToCanvas(canvasRef.current, true);
     }
   };
 
-  // Download high-resolution PNG cover (always with video frame)
+  // Download high-resolution PNG
   const handleDownload = () => {
     if (!canvasRef.current) return;
     setIsGenerating(true);
@@ -393,16 +969,13 @@ export default function ShortsThumbnailModal({
     setIntroBurnSuccess(false);
 
     try {
-      let dataUrl;
       const offscreen = document.createElement('canvas');
       if (introMode === 'overlay') {
-        // Transparent overlay: only header banner and cards, video plays underneath in real-time
         renderThumbnailToCanvas(offscreen, false);
       } else {
-        // Freeze frame: include captured video frame from scrubber
         renderThumbnailToCanvas(offscreen, true);
       }
-      dataUrl = offscreen.toDataURL('image/png');
+      const dataUrl = offscreen.toDataURL('image/png');
 
       const res = await apiFetch('/api/thumbnail-intro', {
         method: 'POST',
@@ -443,20 +1016,17 @@ export default function ShortsThumbnailModal({
       isOpen={isOpen}
       onClose={onClose}
       eyebrow="THUMBNAIL STUDIO & VIDEO INTRO PRO"
-      title="9:16 Viral Thumbnail & Video Intro"
+      title="Studio Desain Cover 9:16 & Intro Video"
       size="xl"
     >
       <div className="flex flex-col lg:flex-row gap-6 items-start">
         {/* Left Side: Live 9:16 Canvas Preview & Actions */}
         <div className="w-full lg:w-[380px] shrink-0 flex flex-col items-center">
           <div className="relative w-full aspect-[9/16] bg-black/90 rounded-card overflow-hidden border-2 border-rule shadow-2xl flex items-center justify-center">
-            <canvas
-              ref={canvasRef}
-              className="w-full h-full object-contain"
-            />
+            <canvas ref={canvasRef} className="w-full h-full object-contain" />
           </div>
 
-          {/* Hidden Video for Canvas Frame Extraction */}
+          {/* Hidden Video for Frame Scrubbing */}
           <video
             ref={videoRef}
             src={videoUrl}
@@ -540,11 +1110,6 @@ export default function ShortsThumbnailModal({
                 <span className="text-[9px] font-normal opacity-80 mt-0.5">Cover diam 2.5s</span>
               </button>
             </div>
-            <p className="text-[10px] text-muted leading-tight">
-              {introMode === 'overlay'
-                ? '✨ Rekomendasi: Banner hook melayang di atas video. Pembicara & video tetap bergerak normal dari detik 0.'
-                : 'Frame video diam selama 2.5 detik sebagai pembuka sebelum video mulai bergerak.'}
-            </p>
           </div>
 
           {/* Primary Action 1: Burn as Video Intro */}
@@ -552,7 +1117,6 @@ export default function ShortsThumbnailModal({
             onClick={handleBurnIntro}
             disabled={isBurningIntro}
             className="btn-primary w-full py-3 mt-3 text-xs flex items-center justify-center gap-2 font-bold shadow-lg cursor-pointer"
-            title="Bakar thumbnail ini ke 2.5 detik pertama video klip lengkap dengan SFX"
           >
             {isBurningIntro ? (
               <>
@@ -572,20 +1136,151 @@ export default function ShortsThumbnailModal({
             onClick={handleDownload}
             disabled={isGenerating || isBurningIntro}
             className="btn-quiet w-full py-2 mt-2 text-xs flex items-center justify-center gap-1.5 cursor-pointer font-medium"
-            title="Unduh file gambar cover PNG terpisah untuk upload manual"
           >
             <Download size={14} />
             <span>Download Gambar Cover (PNG 1080x1920)</span>
           </button>
         </div>
 
-        {/* Right Side: Customization Controls */}
-        <div className="flex-1 w-full space-y-5 overflow-y-auto max-h-[75vh] custom-scrollbar pr-1">
-          {/* Copyright-Free Audio SFX Overlay */}
+        {/* Right Side: Design & Customization Controls */}
+        <div className="flex-1 w-full space-y-5 overflow-y-auto max-h-[75vh] custom-scrollbar pr-1 text-left">
+          
+          {/* 1. LAYOUT TEMPLATES (7 OPTIONS) */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="eyebrow text-brass flex items-center gap-1.5">
+                <Layout size={13} /> TEMPLATE DESAIN THUMBNAIL (7 PILIHAN)
+              </label>
+              <span className="text-[11px] text-muted font-mono">{selectedTemplate}</span>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2">
+              {TEMPLATE_PRESETS.map((tpl) => (
+                <div
+                  key={tpl.id}
+                  onClick={() => setSelectedTemplate(tpl.id)}
+                  className={`p-2.5 rounded-card border cursor-pointer transition-all flex flex-col justify-between ${
+                    selectedTemplate === tpl.id
+                      ? 'border-brass bg-brass/10 shadow-sm ring-1 ring-brass/40'
+                      : 'border-rule bg-paper hover:bg-paper3'
+                  }`}
+                >
+                  <div>
+                    <div className="flex items-center justify-between gap-1 mb-1">
+                      <span className="text-xl">{tpl.icon}</span>
+                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-surface border border-rule text-brass">
+                        {tpl.badge}
+                      </span>
+                    </div>
+                    <div className="font-bold text-xs text-ink leading-tight">{tpl.name}</div>
+                  </div>
+                  <div className="text-[10px] text-muted leading-tight mt-1.5 line-clamp-2">
+                    {tpl.desc}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* 2. 16 VIRAL COLOR THEMES */}
+          <div className="space-y-2">
+            <label className="eyebrow flex items-center gap-1.5">
+              <Palette size={13} /> 16 WARNA TEMA POPULER
+            </label>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 max-h-[140px] overflow-y-auto p-1 border border-rule/60 rounded-card [color-scheme:dark]">
+              {COLOR_PRESETS.map((preset) => (
+                <button
+                  key={preset.id}
+                  onClick={() => setSelectedColor(preset)}
+                  className={`p-1.5 rounded text-left flex items-center gap-2 border transition-all cursor-pointer ${
+                    selectedColor.id === preset.id
+                      ? 'border-brass bg-paper3 shadow-xs'
+                      : 'border-transparent hover:bg-surface'
+                  }`}
+                >
+                  <span
+                    className="w-4 h-4 rounded-full shrink-0 border border-white/30 shadow-xs"
+                    style={{ backgroundColor: preset.color }}
+                  />
+                  <span className="text-[11px] font-medium text-ink truncate">{preset.name}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* 3. 1-CLICK VIRAL STICKERS & BADGES */}
+          <div className="space-y-2">
+            <label className="eyebrow flex items-center gap-1.5">
+              <Flame size={13} className="text-brass" /> STIKER VIRAL (1-KLIK)
+            </label>
+            <div className="flex flex-wrap gap-1.5">
+              {STICKER_PRESETS.map((stk) => (
+                <button
+                  key={stk.id}
+                  onClick={() => setSelectedSticker(stk.id)}
+                  className={`px-2.5 py-1 text-xs rounded-full border transition-all cursor-pointer ${
+                    selectedSticker === stk.id
+                      ? 'bg-brass text-surface font-bold border-brass shadow-xs'
+                      : 'bg-paper text-muted border-rule hover:text-ink hover:border-muted'
+                  }`}
+                >
+                  {stk.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* 4. TYPOGRAPHY & READABILITY ENHANCERS */}
+          <div className="p-3.5 bg-paper2 rounded-card border border-rule grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {/* Font Style */}
+            <div>
+              <span className="eyebrow block mb-1 text-[10px]">TIPE FONT</span>
+              <select
+                value={selectedFont.id}
+                onChange={(e) => setSelectedFont(FONT_OPTIONS.find((f) => f.id === e.target.value) || FONT_OPTIONS[0])}
+                className="w-full bg-paper border border-rule rounded px-2 py-1.5 text-xs text-ink focus:border-brass"
+              >
+                {FONT_OPTIONS.map((f) => (
+                  <option key={f.id} value={f.id}>{f.name}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Readability Vignette */}
+            <div>
+              <div className="flex items-center justify-between text-[10px] text-muted mb-1 font-mono">
+                <span>VIGNETTE GELAP:</span>
+                <span className="text-brass font-bold">{vignetteDim}%</span>
+              </div>
+              <input
+                type="range"
+                min="0"
+                max="80"
+                value={vignetteDim}
+                onChange={(e) => setVignetteDim(parseInt(e.target.value))}
+                className="w-full accent-brass cursor-pointer"
+              />
+            </div>
+
+            {/* Highlighter marker */}
+            <div className="flex flex-col justify-end">
+              <label className="flex items-center gap-2 cursor-pointer text-xs text-ink py-1">
+                <input
+                  type="checkbox"
+                  checked={highlightText}
+                  onChange={(e) => setHighlightText(e.target.checked)}
+                  className="rounded text-brass focus:ring-brass"
+                />
+                <span className="font-semibold">Kotak Stabilo Teks</span>
+              </label>
+            </div>
+          </div>
+
+          {/* 5. AUDIO SFX OVERLAY */}
           <div className="p-3.5 bg-paper2 rounded-card border border-brass/30 space-y-2.5">
             <div className="flex items-center justify-between">
               <label className="eyebrow text-brass flex items-center gap-1.5">
-                <Music size={13} /> AUDIO SFX INTRO (100% BEBAS COPYRIGHT)
+                <Music size={13} /> AUDIO SFX INTRO (BEBAS COPYRIGHT)
               </label>
               <div className="flex items-center gap-2 text-xs text-muted">
                 <span>Volume:</span>
@@ -628,56 +1323,91 @@ export default function ShortsThumbnailModal({
                 </div>
               ))}
             </div>
-            <p className="text-[10px] text-muted">
-              SFX matematika murni & public domain yang berbunyi di detik ke-0 tanpa memotong suara narator.
-            </p>
           </div>
 
-          {/* Preset Color Themes */}
-          <div>
-            <label className="eyebrow block mb-2">🎨 WARNA TEMA HEADER</label>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-              {COLOR_PRESETS.map((preset) => (
-                <button
-                  key={preset.id}
-                  onClick={() => setSelectedColor(preset)}
-                  className={`p-2 rounded-input border text-xs font-medium flex items-center gap-2 transition-all cursor-pointer ${
-                    selectedColor.id === preset.id
-                      ? 'border-brass bg-paper3 shadow-xs'
-                      : 'border-rule hover:border-muted bg-paper'
-                  }`}
-                >
-                  <span className="w-4 h-4 rounded-full shrink-0 border border-white/20" style={{ backgroundColor: preset.color }} />
-                  <span className="truncate">{preset.name}</span>
-                </button>
-              ))}
+          {/* 6. TEKS JUDUL & KATEGORI */}
+          <div className="space-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="eyebrow block mb-1">🔍 KATEGORI / TOPIC PILL</label>
+                <input
+                  type="text"
+                  value={pillText}
+                  onChange={(e) => setPillText(e.target.value)}
+                  className="w-full bg-paper border border-rule rounded-input px-3 py-2 text-xs text-ink focus:outline-none focus:border-brass"
+                  placeholder="Contoh: Trending, AI & Tech, Podcast..."
+                />
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="eyebrow">📢 UKURAN JUDUL</label>
+                  <span className="font-mono text-brass text-xs">{headlineSize}px</span>
+                </div>
+                <input
+                  type="range"
+                  min="42"
+                  max="86"
+                  value={headlineSize}
+                  onChange={(e) => setHeadlineSize(parseInt(e.target.value))}
+                  className="w-full accent-brass cursor-pointer mt-1"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="eyebrow block mb-1">📢 HEADLINE / JUDUL UTAMA</label>
+              <textarea
+                rows={2}
+                value={headline}
+                onChange={(e) => setHeadline(e.target.value)}
+                className="w-full bg-paper border border-rule rounded-input p-2.5 text-xs text-ink focus:outline-none focus:border-brass font-bold"
+                placeholder="Tulis judul yang memicu rasa penasaran penonton..."
+              />
             </div>
           </div>
 
-          {/* Curve Style */}
-          <div>
-            <label className="eyebrow block mb-2">✂️ BENTUK POTONGAN HEADER (CURVE)</label>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-              {[
-                { id: 'arch', label: 'Arch (Contoh)' },
-                { id: 'wave', label: 'Wave (Gelombang)' },
-                { id: 'slant', label: 'Slant (Miring)' },
-                { id: 'straight', label: 'Straight (Lurus)' },
-              ].map((style) => (
-                <button
-                  key={style.id}
-                  onClick={() => setCurveStyle(style.id)}
-                  className={`py-1.5 px-2 text-xs rounded border text-center cursor-pointer transition-colors ${
-                    curveStyle === style.id ? 'bg-paper3 border-brass text-brass font-bold' : 'border-rule text-muted hover:text-ink'
-                  }`}
-                >
-                  {style.label}
-                </button>
-              ))}
+          {/* 7. KARTU PENGUMUMAN / SUB-HOOK */}
+          <div className="p-3.5 bg-paper2 rounded-card border border-rule space-y-2.5">
+            <div className="flex items-center justify-between">
+              <label className="eyebrow flex items-center gap-1.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={showBottomCard}
+                  onChange={(e) => setShowBottomCard(e.target.checked)}
+                  className="rounded text-brass focus:ring-brass"
+                />
+                <span>TAMPILKAN KARTU BAWAH / SUB-HOOK</span>
+              </label>
             </div>
+
+            {showBottomCard && (
+              <div className="space-y-2 pt-1">
+                <div>
+                  <span className="text-[10px] uppercase font-mono text-muted">Label Eyebrow:</span>
+                  <input
+                    type="text"
+                    value={cardEyebrow}
+                    onChange={(e) => setCardEyebrow(e.target.value)}
+                    className="w-full bg-paper border border-rule rounded-input px-2.5 py-1.5 text-xs text-ink mt-0.5"
+                    placeholder="Contoh: ANNOUNCEMENTS, TIPS, KESIMPULAN..."
+                  />
+                </div>
+                <div>
+                  <span className="text-[10px] uppercase font-mono text-muted">Isi Hook Bawah:</span>
+                  <textarea
+                    rows={2}
+                    value={cardText}
+                    onChange={(e) => setCardText(e.target.value)}
+                    className="w-full bg-paper border border-rule rounded-input p-2.5 text-xs text-ink mt-0.5"
+                    placeholder="Ringkasan atau kalimat penutup video..."
+                  />
+                </div>
+              </div>
+            )}
           </div>
 
-          {/* Channel Logo Upload */}
+          {/* 8. CHANNEL LOGO */}
           <div className="p-3.5 bg-paper2 rounded-card border border-rule space-y-2.5">
             <div className="flex items-center justify-between">
               <label className="eyebrow text-brass flex items-center gap-1.5">
@@ -717,7 +1447,7 @@ export default function ShortsThumbnailModal({
                   <Upload size={13} />
                   <span>{channelLogo ? 'Ganti Logo' : 'Upload Logo Channel (PNG/JPG)'}</span>
                 </button>
-                <p className="text-[10px] text-muted mt-1">Logo tersimpan permanen untuk seluruh klip berikutnya.</p>
+                <p className="text-[10px] text-muted mt-1">Logo tersimpan otomatis untuk seluruh klip berikutnya.</p>
               </div>
             </div>
 
@@ -743,83 +1473,6 @@ export default function ShortsThumbnailModal({
             )}
           </div>
 
-          {/* Top Search Pill */}
-          <div className="space-y-1.5">
-            <label className="eyebrow block">🔍 TEKS SEARCH PILL (KATEGORI / NAMA)</label>
-            <input
-              type="text"
-              value={pillText}
-              onChange={(e) => setPillText(e.target.value)}
-              className="w-full bg-paper border border-rule rounded-input px-3 py-2 text-xs text-ink focus:outline-none focus:border-brass"
-              placeholder="Contoh: Earn Money, AI & Tech, Podcast..."
-            />
-          </div>
-
-          {/* Headline Text & Size */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <label className="eyebrow">📢 HEADLINE UTAMA</label>
-              <div className="flex items-center gap-2 text-xs text-muted">
-                <span>Ukuran:</span>
-                <input
-                  type="range"
-                  min="42"
-                  max="76"
-                  value={headlineSize}
-                  onChange={(e) => setHeadlineSize(parseInt(e.target.value))}
-                  className="w-24 accent-brass"
-                />
-                <span className="font-mono text-brass">{headlineSize}px</span>
-              </div>
-            </div>
-            <textarea
-              rows={3}
-              value={headline}
-              onChange={(e) => setHeadline(e.target.value)}
-              className="w-full bg-paper border border-rule rounded-input p-3 text-xs text-ink focus:outline-none focus:border-brass font-medium"
-              placeholder="Tulis kalimat judul yang menarik dan besar..."
-            />
-          </div>
-
-          {/* Bottom Announcement Card */}
-          <div className="p-3.5 bg-paper2 rounded-card border border-rule space-y-2.5">
-            <div className="flex items-center justify-between">
-              <label className="eyebrow flex items-center gap-1.5 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={showBottomCard}
-                  onChange={(e) => setShowBottomCard(e.target.checked)}
-                  className="rounded text-brass focus:ring-brass"
-                />
-                <span>TAMPILKAN KARTU PENGUMUMAN BAWAH</span>
-              </label>
-            </div>
-
-            {showBottomCard && (
-              <div className="space-y-2 pt-1">
-                <div>
-                  <span className="text-[10px] uppercase font-mono text-muted">Label Kategori (Eyebrow):</span>
-                  <input
-                    type="text"
-                    value={cardEyebrow}
-                    onChange={(e) => setCardEyebrow(e.target.value)}
-                    className="w-full bg-paper border border-rule rounded-input px-2.5 py-1.5 text-xs text-ink mt-0.5"
-                    placeholder="Contoh: ANNOUNCEMENTS, BREAKING, TIPS..."
-                  />
-                </div>
-                <div>
-                  <span className="text-[10px] uppercase font-mono text-muted">Isi Teks Pengumuman:</span>
-                  <textarea
-                    rows={2}
-                    value={cardText}
-                    onChange={(e) => setCardText(e.target.value)}
-                    className="w-full bg-paper border border-rule rounded-input p-2.5 text-xs text-ink mt-0.5 font-medium"
-                    placeholder="Tulis ringkasan hook pengumuman..."
-                  />
-                </div>
-              </div>
-            )}
-          </div>
         </div>
       </div>
     </Modal>
