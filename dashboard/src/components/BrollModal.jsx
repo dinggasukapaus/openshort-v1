@@ -279,6 +279,11 @@ export default function BrollModal({
         clip_index: clipIndex,
         start_time: firstStart,
         end_time: lastEnd,
+        broll_source: 'stock',
+        broll_url: momentsPayload[0]?.broll_url || '',
+        transition: transition,
+        transition_duration: 0.3,
+        broll_volume: brollVolume,
         input_filename: inputFilename || null,
         moments: momentsPayload,
       };

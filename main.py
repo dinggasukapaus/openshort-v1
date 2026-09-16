@@ -88,8 +88,18 @@ model = YOLO(os.environ.get("YOLO_MODEL_PATH", "yolov8n.pt"))
 
 # --- MediaPipe Setup ---
 # Use standard Face Detection (BlazeFace) for speed
-mp_face_detection = mp.solutions.face_detection
-face_detection = mp_face_detection.FaceDetection(model_selection=1, min_detection_confidence=0.5)
+try:
+    if hasattr(mp, 'solutions') and hasattr(mp.solutions, 'face_detection'):
+        mp_face_detection = mp.solutions.face_detection
+        face_detection = mp_face_detection.FaceDetection(model_selection=1, min_detection_confidence=0.5)
+    else:
+        mp_face_detection = None
+        face_detection = None
+        print("⚠️ Notice: 'mediapipe.solutions' not available in this MediaPipe build; using YOLO detector.")
+except Exception as e:
+    mp_face_detection = None
+    face_detection = None
+    print(f"⚠️ Warning: Could not initialize MediaPipe FaceDetection ({e}); using YOLO detector.")
 
 # Consecutive detections a large target move must survive before the camera
 # follows it (see SmoothedCameraman.update_target). Env-overridable so the
@@ -432,6 +442,12 @@ def detect_face_candidates(frame):
     Boxes are in ORIGINAL frame coordinates (detection runs downscaled;
     MediaPipe's relative coords make the mapping exact).
     """
+    if face_detection is None:
+        yolo_box = detect_person_yolo(frame)
+        if yolo_box:
+            return [{'box': yolo_box, 'score': yolo_box[2] * yolo_box[3]}]
+        return []
+
     height, width, _ = frame.shape
     small, _scale = _detection_frame(frame)
     rgb_frame = cv2.cvtColor(small, cv2.COLOR_BGR2RGB)
@@ -803,7 +819,14 @@ def download_youtube_video(url, output_dir="."):
         return ('bestvideo[vcodec^=avc1][height<=1080][ext=mp4]+bestaudio[ext=m4a]/'
                 'bestvideo[vcodec^=avc1][height<=1080]+bestaudio/'
                 'best[height<=1080][ext=mp4]/best[ext=mp4]/best')
-    fallback_fmt = 'best[ext=mp4]/best'
+    fallback_fmt = (
+        'bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/'
+        'bestvideo[vcodec^=avc1][height<=1080]+bestaudio/'
+        'bestvideo[height<=1080]+bestaudio/'
+        'best[height<=1080][ext=mp4]/'
+        'bestvideo+bestaudio/'
+        'best[ext=mp4]/best'
+    )
 
     def _base_opts(extractor_args, proxy):
         return {

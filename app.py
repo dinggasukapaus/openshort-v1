@@ -2311,8 +2311,11 @@ async def process_endpoint(
     # sys.executable, not "python": bare "python" resolves against PATH, which
     # outside Docker is whatever interpreter happens to be first — not the venv
     # running this server. Every job then dies on `import cv2`. The quality
-    # probe above already gets this right.
-    cmd = [sys.executable, "-u", "main.py"] # -u for unbuffered
+    python_bin = sys.executable
+    _venv311_py = os.path.join(os.path.dirname(os.path.abspath(__file__)), "venv311", "Scripts", "python.exe")
+    if os.path.exists(_venv311_py):
+        python_bin = _venv311_py
+    cmd = [python_bin, "-u", "main.py"] # -u for unbuffered
     env = os.environ.copy()
     if not paid_allowed:
         # Daily paid-proxy budget hit: this job runs on the free routes only.
@@ -5474,17 +5477,33 @@ async def apply_broll_to_clip(req: BrollApplyRequest, request: Request):
 
     clip_data = clips[req.clip_index]
 
+    base_name = os.path.basename(json_files[0]).replace('_metadata.json', '')
+    candidates = []
     if req.input_filename:
-        filename = os.path.basename(req.input_filename)
-    else:
-        filename = clip_data.get('video_url', '').split('/')[-1]
-        if not filename:
-            base_name = os.path.basename(json_files[0]).replace('_metadata.json', '')
-            filename = f"{base_name}_clip_{req.clip_index+1}.mp4"
+        candidates.append(os.path.basename(req.input_filename.split('?')[0]))
+    if clip_data.get('video_url'):
+        candidates.append(os.path.basename(clip_data['video_url'].split('?')[0]))
 
-    input_path = os.path.join(output_dir, filename)
-    if not os.path.exists(input_path):
-        raise HTTPException(status_code=404, detail=f"Base video file not found: {input_path}")
+    canonical = _canonical_clip_file(output_dir, base_name, req.clip_index)
+    if canonical:
+        candidates.append(canonical)
+    candidates.append(f"{base_name}_clip_{req.clip_index+1}.mp4")
+
+    clip_suffix = f"clip_{req.clip_index+1}.mp4"
+    for fpath in sorted(glob.glob(os.path.join(output_dir, f"*{clip_suffix}")), key=lambda p: os.path.getmtime(p) if os.path.exists(p) else 0, reverse=True):
+        candidates.append(os.path.basename(fpath))
+
+    input_path = None
+    filename = None
+    for cand in candidates:
+        cand_path = os.path.join(output_dir, cand)
+        if os.path.isfile(cand_path) and os.path.getsize(cand_path) > 0:
+            input_path = cand_path
+            filename = cand
+            break
+
+    if not input_path:
+        raise HTTPException(status_code=404, detail=f"Base video file not found for clip {req.clip_index+1} in {output_dir}")
 
     import cv2
     cap = cv2.VideoCapture(input_path)
