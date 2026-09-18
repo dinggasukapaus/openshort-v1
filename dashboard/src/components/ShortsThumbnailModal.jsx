@@ -321,24 +321,34 @@ export default function ShortsThumbnailModal({
     ctx.restore();
   };
 
-  // Helper: Text Wrapping
+  // Helper: Text Wrapping with full manual newline support
   const wrapText = (ctx, text, maxWidth) => {
-    const words = (text || '').split(' ');
-    const lines = [];
-    let currentLine = words[0] || '';
+    if (!text) return [];
+    // Normalize literal "\n" strings (e.g. from copy-paste) into real newlines and split
+    const normalizedText = String(text).replace(/\\n/g, '\n');
+    const rawLines = normalizedText.split(/\r?\n/);
+    const finalLines = [];
 
-    for (let i = 1; i < words.length; i++) {
-      const word = words[i];
-      const width = ctx.measureText(currentLine + ' ' + word).width;
-      if (width < maxWidth) {
-        currentLine += ' ' + word;
-      } else {
-        lines.push(currentLine);
-        currentLine = word;
+    for (const rawLine of rawLines) {
+      const trimmed = rawLine.trim();
+      if (!trimmed) continue;
+
+      const words = trimmed.split(/\s+/);
+      let currentLine = words[0] || '';
+
+      for (let i = 1; i < words.length; i++) {
+        const word = words[i];
+        const width = ctx.measureText(currentLine + ' ' + word).width;
+        if (width < maxWidth) {
+          currentLine += ' ' + word;
+        } else {
+          finalLines.push(currentLine);
+          currentLine = word;
+        }
       }
+      if (currentLine) finalLines.push(currentLine);
     }
-    if (currentLine) lines.push(currentLine);
-    return lines;
+    return finalLines;
   };
 
   // -------------------------------------------------------------
@@ -747,7 +757,8 @@ export default function ShortsThumbnailModal({
     const boxW = W - 100;
     const boxX = 50 + headlinePosX;
     const lines = wrapText(ctx, headline, boxW - 80);
-    const boxH = Math.max(220, lines.length * 70 + 80);
+    const lineSpacing = headlineSize * 1.25;
+    const boxH = Math.max(220, lines.length * lineSpacing + 80);
 
     const boxBg = customBgColor ? hexToRgba(customBgColor, bgBoxOpacity / 100) : 'rgba(15, 23, 42, 0.92)';
     ctx.fillStyle = boxBg;
@@ -772,7 +783,7 @@ export default function ShortsThumbnailModal({
     if (finalAlign === 'right') textX = boxX + boxW - 40;
 
     lines.forEach((l, i) => {
-      ctx.fillText(l, textX, boxY + 40 + i * (headlineSize * 1.2));
+      ctx.fillText(l, textX, boxY + 40 + i * lineSpacing);
     });
 
     // Bottom Ticker Banner
@@ -1050,10 +1061,10 @@ export default function ShortsThumbnailModal({
     const lineSpacing = headlineSize * 0.95;
 
     if (customBgBox) {
-      drawHeadlineBackgroundBox(ctx, topLines, startX, 210 + headlinePosY, lineSpacing, finalAlign, W);
+      drawHeadlineBackgroundBox(ctx, topLines, startX, 210 + headlinePosY - lineSpacing * 0.5, lineSpacing, finalAlign, W);
     }
 
-    topLines.slice(0, 2).forEach((tl, i) => {
+    topLines.forEach((tl, i) => {
       ctx.fillText(tl, startX, 210 + headlinePosY + i * lineSpacing);
     });
 
@@ -1219,30 +1230,34 @@ export default function ShortsThumbnailModal({
     ctx.fillStyle = customHeadlineColor || '#FFFFFF';
     ctx.fillText(tier1Text, startX, tier1Y);
 
-    // Tier 2: Giant Ultra-Bold Keyword / Question (e.g. "HIJAB?")
-    const tier2Text = (headline || 'HIJAB?').toUpperCase();
-    const tier2Size = Math.max(88, Math.min(150, Math.round(headlineSize * 1.7)));
+    // Tier 2: Giant Ultra-Bold Keyword / Headline (e.g. "HIJAB?")
+    const tier2Lines = wrapText(ctx, (headline || 'HIJAB?').toUpperCase(), W - 140);
+    const tier2Size = Math.max(76, Math.min(140, Math.round(headlineSize * (tier2Lines.length > 1 ? 1.35 : 1.6))));
 
     ctx.font = `900 ${tier2Size}px ${selectedFont.family}`;
     ctx.textAlign = finalAlign;
     ctx.textBaseline = 'middle';
 
-    const tier2Y = tier1Y + tier1Size * 0.6 + tier2Size * 0.55 + 16;
+    const tier2LineSpacing = tier2Size * 1.15;
+    const tier2StartY = tier1Y + tier1Size * 0.6 + tier2Size * 0.55 + 16;
 
     if (customBgBox) {
-      drawHeadlineBackgroundBox(ctx, [tier2Text], startX, tier2Y - tier2Size * 0.5, tier2Size, finalAlign, W);
+      drawHeadlineBackgroundBox(ctx, tier2Lines, startX, tier2StartY - tier2Size * 0.5, tier2LineSpacing, finalAlign, W);
     }
 
-    // Heavy outline + deep shadow for pop
-    ctx.strokeStyle = '#000000';
-    ctx.lineWidth = 12;
-    ctx.strokeText(tier2Text, startX, tier2Y);
+    // Heavy outline + deep shadow for pop across all headline lines
+    tier2Lines.forEach((line, idx) => {
+      const lineY = tier2StartY + idx * tier2LineSpacing;
+      ctx.strokeStyle = '#000000';
+      ctx.lineWidth = 12;
+      ctx.strokeText(line, startX, lineY);
 
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.95)';
-    ctx.shadowBlur = 24;
-    ctx.shadowOffsetY = 6;
-    ctx.fillStyle = customHeadlineColor || '#FFFFFF';
-    ctx.fillText(tier2Text, startX, tier2Y);
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.95)';
+      ctx.shadowBlur = 24;
+      ctx.shadowOffsetY = 6;
+      ctx.fillStyle = customHeadlineColor || '#FFFFFF';
+      ctx.fillText(line, startX, lineY);
+    });
 
     // Reset shadow
     ctx.shadowColor = 'transparent';
@@ -1250,8 +1265,14 @@ export default function ShortsThumbnailModal({
     ctx.shadowOffsetY = 0;
 
     // Technical cyan blueprint line accent below title
-    const accentW = Math.min(320, Math.max(140, ctx.measureText(tier2Text).width * 0.45));
-    const accentY = tier2Y + tier2Size * 0.55 + 18;
+    let maxTier2Width = 0;
+    tier2Lines.forEach((line) => {
+      const lw = ctx.measureText(line).width;
+      if (lw > maxTier2Width) maxTier2Width = lw;
+    });
+    const accentW = Math.min(360, Math.max(140, maxTier2Width * 0.45));
+    const lastTier2Y = tier2StartY + (tier2Lines.length - 1) * tier2LineSpacing;
+    const accentY = lastTier2Y + tier2Size * 0.55 + 18;
     ctx.fillStyle = customBgColor || '#38BDF8';
     let accentX = (W - accentW) / 2 + headlinePosX;
     if (finalAlign === 'left') accentX = 80 + headlinePosX;
@@ -1313,7 +1334,7 @@ export default function ShortsThumbnailModal({
         const a = document.createElement('a');
         a.href = url;
         const cleanJob = (jobId || 'short').slice(0, 8);
-        const cleanTitle = (headline || 'thumbnail').slice(0, 20).replace(/[^a-zA-Z0-9]/g, '_');
+        const cleanTitle = (headline || 'thumbnail').replace(/\r?\n/g, ' ').slice(0, 20).replace(/[^a-zA-Z0-9]/g, '_');
         a.download = `cover_${cleanJob}_clip_${clipIndex + 1}_${cleanTitle}.png`;
         document.body.appendChild(a);
         a.click();
@@ -1723,13 +1744,16 @@ export default function ShortsThumbnailModal({
             </div>
 
             <div>
-              <label className="eyebrow block mb-1">📢 HEADLINE / JUDUL UTAMA</label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="eyebrow">📢 HEADLINE / JUDUL UTAMA</label>
+                <span className="text-[10px] text-muted">Tekan <b>Enter</b> untuk baris baru</span>
+              </div>
               <textarea
-                rows={2}
+                rows={3}
                 value={headline}
                 onChange={(e) => setHeadline(e.target.value)}
-                className="w-full bg-paper border border-rule rounded-input p-2.5 text-xs text-ink focus:outline-none focus:border-brass font-bold"
-                placeholder="Tulis judul yang memicu rasa penasaran penonton..."
+                className="w-full bg-paper border border-rule rounded-input p-2.5 text-xs text-ink focus:outline-none focus:border-brass font-bold resize-y"
+                placeholder="Tulis judul yang memicu rasa penasaran penonton... (Enter untuk ganti baris)"
               />
             </div>
 
