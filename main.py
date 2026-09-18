@@ -27,7 +27,8 @@ import layout_picker
 import llm_backend
 from clip_selection import (build_transcript_windows, clip_count_targets,
                             clip_duration_bounds, compute_viral_score_v2,
-                            snap_clip_to_words, trim_to_best)
+                            get_heatmap_metrics_for_range, snap_clip_to_words,
+                            trim_to_best)
 from ffmpeg_utils import (video_encode_args, audio_encode_args, QUALITY,
                           QUALITY_FAST, METADATA_SCRUB)
 from dotenv import load_dotenv
@@ -864,6 +865,19 @@ def download_youtube_video(url, output_dir="."):
         with yt_dlp.YoutubeDL(_base_opts(extractor_args, proxy)) as ydl:
             info = ydl.extract_info(url, download=False)
         sanitized = sanitize_filename(info.get('title', 'youtube_video'))
+
+        # Extract YouTube Most Replayed (Heatmap) audience data if available
+        heatmap = info.get('heatmap')
+        if heatmap:
+            try:
+                with open(os.path.join(output_dir, f'{sanitized}_heatmap.json'), 'w', encoding='utf-8') as f:
+                    json.dump(heatmap, f, indent=2)
+                with open(os.path.join(output_dir, 'heatmap.json'), 'w', encoding='utf-8') as f:
+                    json.dump(heatmap, f, indent=2)
+                print(f"📊 Extracted YouTube Most Replayed heatmap ({len(heatmap)} data points)")
+            except Exception as e:
+                print(f"⚠️ Failed to write heatmap file: {e}")
+
         expected = os.path.join(output_dir, f'{sanitized}.mp4')
         if os.path.exists(expected):
             os.remove(expected)
@@ -1584,7 +1598,7 @@ def score_batch_size():
     return 3 if llm_backend.active() else 8
 
 
-def get_viral_clips(transcript_result, video_duration):
+def get_viral_clips(transcript_result, video_duration, heatmap_data=None):
     """Two-pass clip selection: score transcript windows, then detail the best.
 
     Windowing gives even coverage on long videos (a single call over the whole
@@ -1597,9 +1611,9 @@ def get_viral_clips(transcript_result, video_duration):
         # Self-hosted text model: no Google key needed for this stage.
         client = None
         model_name = llm_backend.model_name()
-        print(f"\U0001f916  Analyzing with local LLM at {llm_backend.base_url()} (2-pass: score → detail)...")
+        print(f"🤖  Analyzing with local LLM at {llm_backend.base_url()} (2-pass: score → detail)...")
     else:
-        print("\U0001f916  Analyzing with Gemini (2-pass: score → detail)...")
+        print("🤖  Analyzing with Gemini (2-pass: score → detail)...")
         api_key = os.getenv("GEMINI_API_KEY")
         if not api_key:
             print("❌ Error: GEMINI_API_KEY not found in environment variables "
@@ -1607,7 +1621,7 @@ def get_viral_clips(transcript_result, video_duration):
             return None
         client = genai.Client(api_key=api_key)
         model_name = os.environ.get("GEMINI_MODEL") or 'gemini-3.1-flash-lite'
-    print(f"\U0001f916  Model: {model_name} | language: {language}")
+    print(f"🤖  Model: {model_name} | language: {language}")
 
     # Full word list — ground truth for snapping cut points.
     words = []
@@ -1625,6 +1639,16 @@ def get_viral_clips(transcript_result, video_duration):
             transcript_result, video_duration,
             window_seconds=max(90, int(max_secs * 1.5)))
         print(f"   Built {len(windows)} scoring window(s).")
+
+        # YouTube Heatmap: attach metrics to windows if available
+        if heatmap_data:
+            for w in windows:
+                m = get_heatmap_metrics_for_range(heatmap_data, w["start"], w["end"])
+                if m:
+                    w["heatmap_metrics"] = m
+            peak_wins = sum(1 for w in windows if (w.get("heatmap_metrics") or {}).get("replay_score", 0) >= 65.0)
+            print(f"   📊 YouTube Heatmap: {peak_wins} window(s) identified with strong audience replay intensity (≥65%).")
+
         costs = []
 
         # --- Pass 1: score windows in batches, keep the highest-scoring ---
@@ -1634,7 +1658,16 @@ def get_viral_clips(transcript_result, video_duration):
         # transcript do not fit; a silently truncated prompt scores garbage.
         SCORE_BATCH = score_batch_size()
         def _payload(ws):
-            return [{"id": w["id"], "start": w["start"], "end": w["end"], "text": w["text"]} for w in ws]
+            items = []
+            for w in ws:
+                item = {"id": w["id"], "start": w["start"], "end": w["end"], "text": w["text"]}
+                hm = w.get("heatmap_metrics")
+                if hm:
+                    item["audience_replay_peak_percent"] = hm["replay_score"]
+                    if hm["replay_score"] >= 65.0:
+                        item["audience_replay_note"] = f"HIGH AUDIENCE REPLAY: {hm['replay_score']}% peak intensity near {int(hm['peak_time'])}s"
+                items.append(item)
+            return items
 
         def _score_prompt(ws):
             return gemini_worker.SCORE_PROMPT_TEMPLATE.format(
@@ -1646,11 +1679,23 @@ def get_viral_clips(transcript_result, video_duration):
                 client, model_name, windows[b:b + SCORE_BATCH], _score_prompt,
                 gemini_worker.ScoreResponse, "windows", costs, "score"))
 
+        by_id = {w["id"]: w for w in windows}
+
+        # Boost candidate window scores using real YouTube audience replay signals
+        for w in scored:
+            wid = w.get("id")
+            if wid in by_id:
+                hm = by_id[wid].get("heatmap_metrics")
+                if hm and hm.get("replay_score", 0) >= 60.0:
+                    raw_score = float(w.get("window_score", w.get("score", 0)))
+                    bonus = min(20.0, (hm["replay_score"] - 50.0) * 0.4)
+                    w["window_score"] = min(100.0, raw_score + bonus)
+                    w["replay_score"] = hm["replay_score"]
+
         # Shortlist the top windows; scale with duration so long videos surface
         # more candidates without exploding the detail call.
         scored.sort(key=lambda w: w.get("window_score", w.get("score", 0)), reverse=True)
         target = max(3, min(10, int(video_duration // 90) + 2))
-        by_id = {w["id"]: w for w in windows}
         shortlist = []
         for w in scored[:target]:
             wid = w.get("id")
@@ -1680,6 +1725,10 @@ def get_viral_clips(transcript_result, video_duration):
                     item["hook_promise"] = w["hook_promise"]
                 if w.get("scouted_events"):
                     item["scouted_events"] = w["scouted_events"]
+                hm = w.get("heatmap_metrics")
+                if hm:
+                    item["audience_replay_peak_percent"] = hm["replay_score"]
+                    item["audience_replay_peak_sec"] = hm["peak_time"]
                 items.append(item)
             return items
 
@@ -1695,8 +1744,18 @@ def get_viral_clips(transcript_result, video_duration):
         shorts = _run_stage_split(client, model_name, shortlist, _detail_prompt,
                                   gemini_worker.DetailResponse, "shorts", costs, "detail")
 
-        # Compute Viral Potential Ranking Score v2 and normalize predicted_score
+        # Compute Viral Potential Ranking Score v2 and blend YouTube replay signals
         for s in shorts:
+            c_start = float(s.get("start", 0))
+            c_end = float(s.get("end", 0))
+            if heatmap_data:
+                m = get_heatmap_metrics_for_range(heatmap_data, c_start, c_end)
+                if m:
+                    s["replay_score"] = m["replay_score"]
+                    s["replay_peak_time"] = m["peak_time"]
+                    s["replay_avg"] = round(m["avg_val"] * 100.0, 1)
+                    if m["replay_score"] >= 65.0:
+                        s["is_most_replayed"] = True
             s["predicted_score"] = compute_viral_score_v2(s)
 
         orig_count = len(shorts)
@@ -1994,10 +2053,34 @@ if __name__ == '__main__':
             transcript = None
 
         # 4. Gemini Analysis (transcript-driven, or vision for silent videos)
+        heatmap_data = None
+        heatmap_file = os.path.join(output_dir, "heatmap.json")
+        if os.path.exists(heatmap_file):
+            try:
+                with open(heatmap_file, "r", encoding="utf-8") as hf:
+                    heatmap_data = json.load(hf)
+                if isinstance(heatmap_data, list) and heatmap_data:
+                    print(f"📊 Replay Heatmap: Loaded {len(heatmap_data)} audience retention points from YouTube.")
+                else:
+                    heatmap_data = None
+            except Exception as e:
+                print(f"⚠️ Could not load heatmap data ({e}) — continuing without heatmap.")
+                heatmap_data = None
+
         if transcript is not None:
-            clips_data = get_viral_clips(transcript, duration)
+            clips_data = get_viral_clips(transcript, duration, heatmap_data=heatmap_data)
         else:
             clips_data = get_visual_clips(input_video, duration)
+            if clips_data and 'shorts' in clips_data and heatmap_data:
+                for s in clips_data['shorts']:
+                    m = get_heatmap_metrics_for_range(heatmap_data, s.get("start", 0), s.get("end", 0))
+                    if m:
+                        s["replay_score"] = m["replay_score"]
+                        s["replay_peak_time"] = m["peak_time"]
+                        s["replay_avg"] = round(m["avg_val"] * 100.0, 1)
+                        if m["replay_score"] >= 65.0:
+                            s["is_most_replayed"] = True
+                        s["predicted_score"] = compute_viral_score_v2(s)
 
         if not clips_data or 'shorts' not in clips_data:
             # Deliberately fail instead of reframing the whole video: that path

@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { Scan, Scissors, Activity, Radio, CheckCircle } from 'lucide-react';
+import { Scan, Scissors, Activity, Radio, CheckCircle, Flame } from 'lucide-react';
 import { getApiUrl } from '../config';
 import { apiFetch } from '../lib/api';
 
@@ -189,6 +189,7 @@ const ProcessingAnimation = ({ media, isComplete, syncedTime, isSyncedPlaying, s
               <div className="readout text-brass space-y-1">
                  <div className="flex items-center gap-2"><Activity size={10} className="animate-pulse" /> {'>'} ANALYSIS_THREAD_01: ACTIVE</div>
                  <div className="flex items-center gap-2"><Radio size={10} /> {'>'} AUDIO_TRANSCRIPT: PROCESSING</div>
+                 <div className="flex items-center gap-2"><Flame size={10} className="text-red-400 fill-red-400 animate-pulse" /> {'>'} YOUTUBE_HEATMAP: REPLAY_SCANNING</div>
               </div>
               <div className="flex gap-1">
                  <div className="w-1 h-3 bg-brass opacity-40 animate-[pulse_0.5s_infinite]"></div>

@@ -380,6 +380,9 @@ Heavily penalize or reject windows containing:
 
 Calculate `window_score` (0-100 integer) based on the overall viral potential of the events discovered.
 
+AUDIENCE REPLAY SIGNALS:
+If any window has `youtube_audience_replay_peak`, real YouTube viewers frequently rewound and replayed this exact part of the video. Strongly prioritize this window as a verified high-engagement moment.
+
 TRANSCRIPT_LANGUAGE: {language}
 VIDEO_DURATION_SECONDS: {video_duration}
 WINDOWS_JSON:
@@ -422,6 +425,9 @@ A clip with Hook=90, Retention=45, Payoff=30 is INFERIOR to a clip with Hook=82,
 Your goal is to identify clips that succeed across the entire viewer journey:
 SCROLL STOP (Hook) -> RETENTION (Sustained Attention) -> PAYOFF (Satisfying Resolution).
 The AI does NOT guarantee virality; the scores represent estimated short-form content potential.
+
+AUDIENCE REPLAY SIGNALS:
+If any window includes `most_replayed_peak`, actual YouTube viewers replayed that exact segment repeatedly. Ensure this moment is preserved within the clip boundaries and serves as a major hook, turning point, or climax!
 
 TIME CONTRACT:
 - Absolute seconds from video start: 0 <= start_time < end_time <= {video_duration}.

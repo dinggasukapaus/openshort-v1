@@ -145,6 +145,12 @@ def compute_viral_score_v2(clip_dict: dict) -> int:
         0.05 * sh
     )
 
+    # YouTube Audience Heatmap Replay Signal
+    # If real audience replay data exists, blend it with AI semantic score
+    replay = _val("replay_score")
+    if replay is not None:
+        base_score = 0.75 * base_score + 0.25 * replay
+
     standalone = _val("standalone_score", default=75.0)
     clipability = _val("clipability_score", default=75.0)
     context_dep = _val("context_dependency", default=20.0)
@@ -158,6 +164,8 @@ def compute_viral_score_v2(clip_dict: dict) -> int:
     quality_factor = max(0.25, min(1.05, quality_factor))
 
     final_score = int(round(max(0.0, min(100.0, base_score * quality_factor))))
+    if replay is not None and replay >= 65.0:
+        clip_dict["is_most_replayed"] = True
     return final_score
 
 
@@ -418,3 +426,55 @@ def snap_clip_to_words(start, end, words, video_duration,
     if new_end <= new_start or new_end - new_start < min_duration:
         return original
     return (round(new_start, 3), round(new_end, 3))
+
+
+def get_heatmap_metrics_for_range(heatmap_data, start_sec, end_sec):
+    """Compute replay metrics from YouTube heatmap data for a time range [start_sec, end_sec].
+
+    YouTube heatmap points have:
+      - start_time: float (seconds)
+      - end_time: float (seconds)
+      - value: float (relative rewatch intensity, normalized 0.0 - 1.0)
+
+    Returns:
+      dict with peak_val, avg_val, peak_time, replay_score (0-100) or None if no data.
+    """
+    if not heatmap_data or not isinstance(heatmap_data, list):
+        return None
+
+    try:
+        s = float(start_sec)
+        e = float(end_sec)
+    except (TypeError, ValueError):
+        return None
+
+    if e <= s:
+        return None
+
+    overlaps = []
+    for pt in heatmap_data:
+        try:
+            p_start = float(pt.get("start_time", 0.0))
+            p_end = float(pt.get("end_time", p_start))
+            if p_end <= p_start:
+                p_end = p_start + 1.0
+            if max(p_start, s) < min(p_end, e) or (s <= p_start <= e):
+                val = float(pt.get("value", 0.0))
+                overlaps.append((pt, val, p_start))
+        except (TypeError, ValueError):
+            continue
+
+    if not overlaps:
+        return None
+
+    peak_tuple = max(overlaps, key=lambda x: x[1])
+    peak_val = max(0.0, min(1.0, peak_tuple[1]))
+    avg_val = max(0.0, min(1.0, sum(x[1] for x in overlaps) / len(overlaps)))
+    peak_time = peak_tuple[2]
+
+    return {
+        "peak_val": round(peak_val, 3),
+        "avg_val": round(avg_val, 3),
+        "peak_time": round(peak_time, 2),
+        "replay_score": round(peak_val * 100.0, 1)
+    }

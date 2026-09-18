@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Download, Share2, Instagram, Youtube, Video, AlertCircle, Loader2, Copy, Check, Wand2, Type, Calendar, Languages, FileText, Link2, Scissors, Crosshair, TrendingUp, Shield, Star, Sparkles, FastForward, Camera, Pencil, X, Film } from 'lucide-react';
+import { Download, Share2, Instagram, Youtube, Video, AlertCircle, Loader2, Copy, Check, Wand2, Type, Calendar, Languages, FileText, Link2, Scissors, Crosshair, TrendingUp, Shield, Star, Sparkles, FastForward, Camera, Pencil, X, Film, Flame } from 'lucide-react';
 import { getApiUrl } from '../config';
 import { apiFetch } from '../lib/api';
 import SubtitleModal from './SubtitleModal';
@@ -967,6 +967,19 @@ export default function ResultCard({ clip, index, jobId, durable, uploadPostKey,
                             <span className="text-muted">/100</span>
                         </button>
                     )}
+                    {/* YouTube Most Replayed Heatmap Badge */}
+                    {clip.is_most_replayed && (
+                        <button
+                            type="button"
+                            onClick={() => setShowScoreModal(true)}
+                            className="bg-red-500/85 hover:bg-red-600 text-white font-mono text-micro uppercase px-2 py-1 rounded-full flex items-center gap-1 border border-red-400/80 shadow-xs transition-all hover:scale-105 cursor-pointer backdrop-blur-sm"
+                            title={`YouTube Audience Most Replayed: ${clip.replay_score || 0}% intensitas putar ulang (Klik untuk rincian)`}
+                        >
+                            <Flame size={11} className="shrink-0 text-amber-300 fill-amber-300 animate-pulse" />
+                            <span className="font-bold">Most Replayed</span>
+                            <span className="text-amber-200">({Math.round(clip.replay_score || 0)}%)</span>
+                        </button>
+                    )}
                     {/* Workflow Status Pill */}
                     <button
                         onClick={cycleStatus}
@@ -1115,6 +1128,17 @@ export default function ResultCard({ clip, index, jobId, durable, uploadPostKey,
                             >
                                 <TrendingUp size={11} />
                                 <span>Score Breakdown</span>
+                            </button>
+                        )}
+                        {clip.is_most_replayed && (
+                            <button
+                                type="button"
+                                onClick={() => setShowScoreModal(true)}
+                                className="readout bg-red-500/15 hover:bg-red-500/25 text-red-400 px-2 py-0.5 rounded-full shrink-0 flex items-center gap-1 border border-red-500/30 transition-colors cursor-pointer"
+                                title="Berdasarkan YouTube Most Replayed Heatmap"
+                            >
+                                <Flame size={11} className="text-red-400 fill-red-400" />
+                                <span>Peak Replay ({Math.round(clip.replay_score || 0)}%)</span>
                             </button>
                         )}
                     </div>
@@ -1392,6 +1416,31 @@ export default function ResultCard({ clip, index, jobId, durable, uploadPostKey,
                             )}
                         </div>
                     </div>
+
+                    {/* YouTube Audience Heatmap Replay Signal */}
+                    {(clip.is_most_replayed || (clip.replay_score !== undefined && clip.replay_score !== null)) && (
+                        <div className="bg-gradient-to-r from-red-500/15 via-amber-500/10 to-paper rounded-input p-3.5 border border-red-500/30 space-y-2.5">
+                            <div className="flex items-center justify-between gap-2">
+                                <div className="flex items-center gap-2 text-xs font-semibold text-red-400 font-mono uppercase">
+                                    <Flame size={16} className="text-red-400 fill-red-400 animate-pulse" />
+                                    <span>YouTube "Most Replayed" Audience Heatmap</span>
+                                </div>
+                                <span className="font-mono text-xs font-bold text-red-300 bg-red-500/20 px-2.5 py-0.5 rounded border border-red-500/30">
+                                    {clip.replay_score ? `${clip.replay_score}% Peak Intensity` : 'High Replay Peak'}
+                                </span>
+                            </div>
+                            <div className="w-full bg-paper3 h-2 rounded-full overflow-hidden">
+                                <div 
+                                    className="h-full bg-gradient-to-r from-amber-500 to-red-500 rounded-full transition-all duration-700"
+                                    style={{ width: `${Math.min(100, Math.max(15, clip.replay_score || 70))}%` }}
+                                />
+                            </div>
+                            <p className="text-[11px] text-muted leading-relaxed">
+                                Terverifikasi dari data kurva retensi penonton YouTube: segmen ini merupakan titik puncak di mana penonton paling sering memutar ulang video secara berulang.
+                                {clip.replay_peak_time ? ` Titik lonjakan tertinggi terdeteksi di sekitar detik ke-${Math.round(clip.replay_peak_time)}s.` : ''}
+                            </p>
+                        </div>
+                    )}
 
                     {/* Editorial Hook Reframing Suggestion (if available) */}
                     {(clip.editorial_hook_suggestion || clip.hook_rewrite_potential) && (
