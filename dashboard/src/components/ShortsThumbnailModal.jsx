@@ -8,8 +8,15 @@ import {
 } from 'lucide-react';
 import { apiFetch } from '../lib/api';
 
-// 7 Viral Layout Templates
+// Viral Layout Templates
 const TEMPLATE_PRESETS = [
+  { 
+    id: 'blueprint-podcast', 
+    name: 'Felix Blueprint', 
+    icon: '📐', 
+    badge: 'Signature',
+    desc: 'Pola blueprint grid arsitektur biru navy + 2-baris judul raksasa ala Felix Siauw' 
+  },
   { 
     id: 'meta-card', 
     name: 'Meta Creator', 
@@ -61,8 +68,9 @@ const TEMPLATE_PRESETS = [
   },
 ];
 
-// 16 Modern Viral Color Palettes
+// Modern Viral Color Palettes
 const COLOR_PRESETS = [
+  { id: 'blueprint-indigo', name: 'Blueprint Navy', color: '#1E3A8A', text: '#FFFFFF', pillBg: '#0F172A', pillText: '#60A5FA', accent: '#3B82F6' },
   { id: 'meta-blue', name: 'Facebook Blue', color: '#1877F2', text: '#FFFFFF', pillBg: '#FFFFFF', pillText: '#1877F2', accent: '#0D65D9' },
   { id: 'youtube-red', name: 'Viral Red', color: '#E50914', text: '#FFFFFF', pillBg: '#FFFFFF', pillText: '#E50914', accent: '#B20710' },
   { id: 'hormozi-gold', name: 'Hormozi Amber', color: '#F59E0B', text: '#000000', pillBg: '#000000', pillText: '#F59E0B', accent: '#D97706' },
@@ -325,6 +333,9 @@ export default function ShortsThumbnailModal({
         break;
       case 'split-comparison':
         renderTemplateSplitComparison(ctx, W, H);
+        break;
+      case 'blueprint-podcast':
+        renderTemplateBlueprintPodcast(ctx, W, H);
         break;
       case 'meta-card':
       default:
@@ -925,6 +936,183 @@ export default function ShortsThumbnailModal({
     ctx.restore();
   };
 
+  // -------------------------------------------------------------
+  // TEMPLATE 8: BLUEPRINT PODCAST / FELIX SIAUW SIGNATURE
+  // -------------------------------------------------------------
+  const renderTemplateBlueprintPodcast = (ctx, W, H) => {
+    ctx.save();
+
+    // 1. Top Blueprint Grid Container (y: 0 -> 680)
+    const headerH = 680;
+
+    // Dark indigo/navy base gradient with smooth bottom fade
+    const bgGrad = ctx.createLinearGradient(0, 0, 0, headerH);
+    bgGrad.addColorStop(0, 'rgba(10, 16, 36, 0.96)');
+    bgGrad.addColorStop(0.65, 'rgba(15, 23, 42, 0.92)');
+    bgGrad.addColorStop(0.85, 'rgba(15, 23, 42, 0.60)');
+    bgGrad.addColorStop(1, 'rgba(15, 23, 42, 0.0)');
+
+    ctx.fillStyle = bgGrad;
+    ctx.fillRect(0, 0, W, headerH);
+
+    // 2. Procedural Blueprint Grid Overlay
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0, 0, W, headerH);
+    ctx.clip();
+
+    const gridSize = 36;
+    const gridMajor = 4; // Every 4th line is a major line
+
+    // Vertical grid lines
+    for (let x = 0; x <= W; x += gridSize) {
+      const isMajor = (x / gridSize) % gridMajor === 0;
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, headerH);
+      ctx.strokeStyle = isMajor ? 'rgba(59, 130, 246, 0.35)' : 'rgba(59, 130, 246, 0.14)';
+      ctx.lineWidth = isMajor ? 1.5 : 0.8;
+      ctx.stroke();
+    }
+
+    // Horizontal grid lines with progressive bottom fade
+    for (let y = 0; y <= headerH; y += gridSize) {
+      const isMajor = (y / gridSize) % gridMajor === 0;
+      const alphaFactor = Math.max(0, 1 - (y / headerH));
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(W, y);
+      ctx.strokeStyle = isMajor 
+        ? `rgba(59, 130, 246, ${0.35 * alphaFactor})` 
+        : `rgba(59, 130, 246, ${0.14 * alphaFactor})`;
+      ctx.lineWidth = isMajor ? 1.5 : 0.8;
+      ctx.stroke();
+    }
+
+    // Technical crosshairs (+) at major intersections
+    for (let x = gridSize * gridMajor; x < W; x += gridSize * gridMajor) {
+      for (let y = gridSize * gridMajor; y < headerH - 80; y += gridSize * gridMajor) {
+        const crossAlpha = Math.max(0, 0.5 * (1 - y / headerH));
+        ctx.strokeStyle = `rgba(147, 197, 253, ${crossAlpha})`;
+        ctx.lineWidth = 1.2;
+        const len = 6;
+        ctx.beginPath();
+        ctx.moveTo(x - len, y);
+        ctx.lineTo(x + len, y);
+        ctx.moveTo(x, y - len);
+        ctx.lineTo(x, y + len);
+        ctx.stroke();
+      }
+    }
+    ctx.restore();
+
+    // 3. Optional Category / Topic Tag or Sticker Badge
+    const stickerObj = STICKER_PRESETS.find((s) => s.id === selectedSticker);
+    if (stickerObj && stickerObj.id !== 'none') {
+      const bText = stickerObj.label;
+      ctx.font = `800 24px ${selectedFont.family}`;
+      const bW = ctx.measureText(bText).width + 36;
+      const bX = (W - bW) / 2;
+      const bY = 70;
+
+      ctx.fillStyle = 'rgba(30, 58, 138, 0.85)';
+      ctx.strokeStyle = '#3B82F6';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.roundRect(bX, bY, bW, 44, 22);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = '#93C5FD';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(bText, W / 2, bY + 22);
+    }
+
+    // 4. Two-Tier Typography (The Felix Siauw Signature)
+    // Tier 1: Lead-in / Question prefix (e.g. "KENAPA LEPAS" or pillText)
+    const tier1Text = (pillText || 'KENAPA LEPAS').toUpperCase();
+    const tier1Size = Math.max(40, Math.min(64, Math.round(headlineSize * 0.75)));
+
+    ctx.font = `800 ${tier1Size}px ${selectedFont.family}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    const tier1Y = stickerObj && stickerObj.id !== 'none' ? 180 : 160;
+
+    // Text drop shadow & subtle stroke for 100% legibility
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
+    ctx.shadowBlur = 18;
+    ctx.shadowOffsetY = 4;
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillText(tier1Text, W / 2, tier1Y);
+
+    // Tier 2: Giant Ultra-Bold Keyword / Question (e.g. "HIJAB?")
+    const tier2Text = (headline || 'HIJAB?').toUpperCase();
+    const tier2Size = Math.max(88, Math.min(150, Math.round(headlineSize * 1.7)));
+
+    ctx.font = `900 ${tier2Size}px ${selectedFont.family}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    const tier2Y = tier1Y + tier1Size * 0.6 + tier2Size * 0.55 + 16;
+
+    // Heavy outline + deep shadow for pop
+    ctx.strokeStyle = '#000000';
+    ctx.lineWidth = 12;
+    ctx.strokeText(tier2Text, W / 2, tier2Y);
+
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.95)';
+    ctx.shadowBlur = 24;
+    ctx.shadowOffsetY = 6;
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillText(tier2Text, W / 2, tier2Y);
+
+    // Reset shadow
+    ctx.shadowColor = 'transparent';
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetY = 0;
+
+    // Technical cyan blueprint line accent below title
+    const accentW = Math.min(320, Math.max(140, ctx.measureText(tier2Text).width * 0.45));
+    const accentY = tier2Y + tier2Size * 0.55 + 18;
+    ctx.fillStyle = '#38BDF8';
+    ctx.fillRect((W - accentW) / 2, accentY, accentW, 4);
+
+    // 5. Bottom Subtitle / Hook Card (Optional)
+    if (showBottomCard && cardText) {
+      const bCardW = W - 140;
+      const bCardH = 200;
+      const bCardX = 70;
+      const bCardY = H - 320;
+
+      ctx.fillStyle = 'rgba(10, 16, 36, 0.88)';
+      ctx.strokeStyle = 'rgba(59, 130, 246, 0.55)';
+      ctx.lineWidth = 3;
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.7)';
+      ctx.shadowBlur = 18;
+      ctx.beginPath();
+      ctx.roundRect(bCardX, bCardY, bCardW, bCardH, 20);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.shadowColor = 'transparent';
+      ctx.fillStyle = '#38BDF8';
+      ctx.font = `800 24px ${selectedFont.family}`;
+      ctx.textAlign = 'center';
+      ctx.fillText((cardEyebrow || 'INTISARI PESAN').toUpperCase(), W / 2, bCardY + 44);
+
+      ctx.fillStyle = '#FFFFFF';
+      ctx.font = `600 32px ${selectedFont.family}`;
+      const cLines = wrapText(ctx, cardText, bCardW - 60);
+      cLines.slice(0, 2).forEach((cl, idx) => {
+        ctx.fillText(cl, W / 2, bCardY + 95 + idx * 44);
+      });
+    }
+
+    ctx.restore();
+  };
+
   const drawCanvas = () => {
     if (canvasRef.current) {
       renderThumbnailToCanvas(canvasRef.current, true);
@@ -1149,7 +1337,7 @@ export default function ShortsThumbnailModal({
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <label className="eyebrow text-brass flex items-center gap-1.5">
-                <Layout size={13} /> TEMPLATE DESAIN THUMBNAIL (7 PILIHAN)
+                <Layout size={13} /> TEMPLATE DESAIN THUMBNAIL ({TEMPLATE_PRESETS.length} PILIHAN)
               </label>
               <span className="text-[11px] text-muted font-mono">{selectedTemplate}</span>
             </div>

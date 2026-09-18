@@ -223,6 +223,50 @@ export default function EffectsModal({
         },
       ];
       setEdits(items);
+    } else if (presetId === 'podcast-cuts') {
+      // Alternating Medium Shot <-> Punch-In Close-Up cuts (Felix Siauw style)
+      // Generates rhythmic cuts every 4-7 seconds across the entire clip
+      const items = [];
+      let editIndex = 1;
+
+      // Opening hook push-in (0s to ~2.8s)
+      const hookDur = Math.min(2.8, Math.max(1.8, Math.round(d * 0.18 * 10) / 10));
+      items.push({
+        id: `e${editIndex++}`,
+        type: 'zoom_in',
+        start: 0.0,
+        end: hookDur,
+        strength: 0.10,
+        sfx: 'whoosh',
+        sfx_volume: 0.35,
+        reason: 'Opening hook push-in',
+      });
+
+      let curT = hookDur + 0.2;
+      let isCloseUp = false;
+
+      // Alternating sequence until near end
+      while (curT + 3.0 < d) {
+        const cutDuration = isCloseUp ? 4.5 : 5.5; // close-up ~4.5s, medium ~5.5s
+        const cutEnd = Math.min(d - 0.5, curT + cutDuration);
+
+        if (isCloseUp) {
+          items.push({
+            id: `e${editIndex++}`,
+            type: 'punch_in',
+            start: Math.round(curT * 10) / 10,
+            end: Math.round(cutEnd * 10) / 10,
+            strength: 0.14,
+            sfx: 'pop',
+            sfx_volume: 0.25,
+            reason: 'Punch-in face close-up on key point',
+          });
+        }
+        curT = cutEnd;
+        isCloseUp = !isCloseUp;
+      }
+
+      setEdits(items);
     }
   };
 
@@ -452,7 +496,23 @@ export default function EffectsModal({
               </button>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+              <button
+                onClick={() => applyPreset('podcast-cuts')}
+                className={`p-2.5 rounded-lg border text-left transition-all ${
+                  selectedPreset === 'podcast-cuts'
+                    ? 'border-brass bg-brass/10 text-ink shadow-sm'
+                    : 'border-rule bg-paper hover:bg-surface text-ink2'
+                }`}
+              >
+                <div className="text-xs font-bold flex items-center gap-1.5">
+                  <span className="text-sm">🎙️</span> Felix Cuts
+                </div>
+                <div className="text-[10px] text-muted leading-tight mt-1">
+                  Bergantian Medium Shot & Punch-In tiap 4-6s
+                </div>
+              </button>
+
               <button
                 onClick={() => applyPreset('viral-hook')}
                 className={`p-2.5 rounded-lg border text-left transition-all ${

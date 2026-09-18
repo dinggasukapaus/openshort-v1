@@ -48,6 +48,7 @@ const POSITION_OPTIONS = [
 // Ready-made caption looks burned server-side as karaoke ASS (word highlight):
 // dimmed base text + strong active word, optional glow/pop/box effect.
 const CAPTION_PRESETS = [
+    { id: 'felix_podcast', label: 'Felix Podcast', style: 'classic', effect: 'none', highlightColor: '#FFFFFF', baseOpacity: 1.0, uppercase: false, fontName: 'Verdana', borderWidth: 2 },
     { id: 'hormozi',     label: 'Hormozi Gold', style: 'karaoke', effect: 'pop',  highlightColor: '#FFDD00', baseOpacity: 1.0, uppercase: true,  fontName: 'Impact',  borderWidth: 4 },
     { id: 'beast_neon',  label: 'MrBeast Neon', style: 'karaoke', effect: 'pop',  highlightColor: '#00FF66', baseOpacity: 0.9, uppercase: true,  fontName: 'Impact',  borderWidth: 3 },
     { id: 'storyteller', label: 'Storyteller',  style: 'karaoke', effect: 'glow', highlightColor: '#38BDF8', baseOpacity: 0.65, uppercase: false, fontName: 'Verdana', borderWidth: 2 },
@@ -125,6 +126,8 @@ export default function SubtitleModal({ isOpen, onClose, onGenerate, onApplyAll,
         setUppercase(p.uppercase);
         setFontName(p.fontName);
         setBorderWidth(p.borderWidth);
+        setBorderColor(p.borderColor || '#000000');
+        setPosition(p.position || 'bottom');
         setFontColor('#FFFFFF');
         setBgOpacity(0);
         // Keep the Remotion preview roughly in sync with the burned look
