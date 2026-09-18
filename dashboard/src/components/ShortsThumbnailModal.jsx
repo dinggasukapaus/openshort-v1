@@ -18,6 +18,13 @@ const TEMPLATE_PRESETS = [
     desc: 'Pola blueprint grid arsitektur biru navy + 2-baris judul raksasa ala Felix Siauw' 
   },
   { 
+    id: 'split-dual-moment', 
+    name: 'Dual Moment (Teks Tengah)', 
+    icon: '🎭', 
+    badge: 'Trending Podcast',
+    desc: 'Split 2 momen video (foto atas close-up & foto bawah wide shot) dengan teks 3D viral di tengah ala Surya / Podcast' 
+  },
+  { 
     id: 'meta-card', 
     name: 'Meta Creator', 
     icon: '📱', 
@@ -248,6 +255,35 @@ export default function ShortsThumbnailModal({
   const [videoLoaded, setVideoLoaded] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
 
+  // Dual-Moment Video Scrubbing & Framing State
+  const bottomVideoRef = useRef(null);
+  const [bottomTime, setBottomTime] = useState(8);
+  const [topZoom, setTopZoom] = useState(1.25);
+  const [bottomZoom, setBottomZoom] = useState(1.0);
+  const [topPanY, setTopPanY] = useState(0);
+  const [bottomPanY, setBottomPanY] = useState(0);
+  const [splitRatio, setSplitRatio] = useState(0.5); // 0.5 = 50% split
+  const [topCustomImg, setTopCustomImg] = useState(null);
+  const [bottomCustomImg, setBottomCustomImg] = useState(null);
+  const topImgInputRef = useRef(null);
+  const bottomImgInputRef = useRef(null);
+
+  const handleTopImgUpload = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => setTopCustomImg(event.target.result);
+    reader.readAsDataURL(file);
+  };
+
+  const handleBottomImgUpload = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => setBottomCustomImg(event.target.result);
+    reader.readAsDataURL(file);
+  };
+
   // Load logo from file
   const handleLogoUpload = (e) => {
     const file = e.target.files?.[0];
@@ -274,12 +310,10 @@ export default function ShortsThumbnailModal({
 
   // Play audio preview
   const playSfxPreview = (sfxId) => {
-    if (sfxId === 'none') return;
     try {
-      const audioUrl = customSfx && sfxId === 'custom' ? customSfx : `/sfx/${sfxId}.wav`;
-      const audio = new Audio(audioUrl);
-      audio.volume = Math.min(1.0, Math.max(0.05, sfxVolume / 100));
-      audio.play().catch((e) => console.log('Audio preview error:', e));
+      const audio = new Audio(getApiUrl(`/sfx/${sfxId}.wav`));
+      audio.volume = Math.max(0, Math.min(1, sfxVolume / 100));
+      audio.play();
     } catch (e) {
       console.warn('Audio playback not supported:', e);
     }
@@ -287,8 +321,21 @@ export default function ShortsThumbnailModal({
 
   const handleLoadedMetadata = () => {
     if (videoRef.current) {
-      setDuration(videoRef.current.duration || 30);
+      const dur = videoRef.current.duration || 30;
+      setDuration(dur);
       setVideoLoaded(true);
+      if (currentTime === 0) {
+        const t1 = Math.min(2.0, dur * 0.15);
+        setCurrentTime(t1);
+        videoRef.current.currentTime = t1;
+      }
+      if (bottomTime === 8) {
+        const t2 = Math.min(10.0, dur * 0.65);
+        setBottomTime(t2);
+        if (bottomVideoRef.current) {
+          bottomVideoRef.current.currentTime = t2;
+        }
+      }
       drawCanvas();
     }
   };
@@ -296,6 +343,9 @@ export default function ShortsThumbnailModal({
   useEffect(() => {
     if (videoRef.current && videoUrl) {
       videoRef.current.load();
+    }
+    if (bottomVideoRef.current && videoUrl) {
+      bottomVideoRef.current.load();
     }
   }, [videoUrl]);
 
@@ -307,7 +357,8 @@ export default function ShortsThumbnailModal({
     selectedTemplate, selectedColor, selectedFont, selectedSticker, pillText, 
     headline, headlineSize, showBottomCard, cardEyebrow, cardText, curveStyle, 
     vignetteDim, highlightText, borderFrame, channelLogo, logoPlacement, currentTime, videoLoaded,
-    headlinePosY, headlinePosX, headlineAlign, customHeadlineColor, customBgColor, customBgBox, bgBoxOpacity
+    headlinePosY, headlinePosX, headlineAlign, customHeadlineColor, customBgColor, customBgBox, bgBoxOpacity,
+    bottomTime, topZoom, bottomZoom, topPanY, bottomPanY, splitRatio, topCustomImg, bottomCustomImg
   ]);
 
   // Helper: Hex color to RGBA string
@@ -408,24 +459,28 @@ export default function ShortsThumbnailModal({
     ctx.clearRect(0, 0, W, H);
 
     // 1. Draw Video Frame
-    if (withVideo && video) {
-      try {
-        const vw = video.videoWidth || W;
-        const vh = video.videoHeight || H;
-        const hRatio = W / vw;
-        const vRatio = H / vh;
-        const ratio = Math.max(hRatio, vRatio);
-        const centerShiftX = (W - vw * ratio) / 2;
-        const centerShiftY = (H - vh * ratio) / 2;
-        ctx.drawImage(video, 0, 0, vw, vh, centerShiftX, centerShiftY, vw * ratio, vh * ratio);
-      } catch (e) {
-        ctx.fillStyle = '#111827';
-        ctx.fillRect(0, 0, W, H);
+    if (withVideo) {
+      if (selectedTemplate === 'split-dual-moment') {
+        renderSplitDualFrames(ctx, W, H);
+      } else if (video) {
+        try {
+          const vw = video.videoWidth || W;
+          const vh = video.videoHeight || H;
+          const hRatio = W / vw;
+          const vRatio = H / vh;
+          const ratio = Math.max(hRatio, vRatio);
+          const centerShiftX = (W - vw * ratio) / 2;
+          const centerShiftY = (H - vh * ratio) / 2;
+          ctx.drawImage(video, 0, 0, vw, vh, centerShiftX, centerShiftY, vw * ratio, vh * ratio);
+        } catch (e) {
+          ctx.fillStyle = '#111827';
+          ctx.fillRect(0, 0, W, H);
+        }
       }
     }
 
     // 2. Readability Vignette & Dimmer Overlay
-    if (withVideo && vignetteDim > 0) {
+    if (withVideo && vignetteDim > 0 && selectedTemplate !== 'split-dual-moment') {
       ctx.save();
       const alpha = Math.min(0.85, vignetteDim / 100);
       // Top and bottom gradient for maximum text clarity
@@ -441,6 +496,9 @@ export default function ShortsThumbnailModal({
 
     // 3. Render Selected Template Layout
     switch (selectedTemplate) {
+      case 'split-dual-moment':
+        renderTemplateDualMoment(ctx, W, H);
+        break;
       case 'hormozi-bold':
         renderTemplateHormozi(ctx, W, H);
         break;
@@ -1161,6 +1219,173 @@ export default function ShortsThumbnailModal({
         ctx.fillText(bl, W / 2, bY + 120 + i * 46);
       });
     }
+    ctx.restore();
+  };
+
+  // -------------------------------------------------------------
+  // DUAL MOMENT: SPLIT FRAMES (ATAS & BAWAH) RENDERER
+  // -------------------------------------------------------------
+  const renderSplitDualFrames = (ctx, W, H) => {
+    const topVideo = videoRef.current;
+    const bottomVideo = bottomVideoRef.current || topVideo;
+    const splitY = H * (splitRatio || 0.5);
+
+    // --- 1. Draw TOP FRAME (Y: 0 -> splitY) ---
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0, 0, W, splitY);
+    ctx.clip();
+
+    if (topCustomImg) {
+      const img = new window.Image();
+      img.src = topCustomImg;
+      if (img.complete) {
+        const iw = img.naturalWidth || W;
+        const ih = img.naturalHeight || splitY;
+        const ratio = Math.max(W / iw, splitY / ih) * (topZoom || 1.25);
+        const shiftX = (W - iw * ratio) / 2;
+        const shiftY = (splitY - ih * ratio) / 2 + (topPanY || 0);
+        ctx.drawImage(img, 0, 0, iw, ih, shiftX, shiftY, iw * ratio, ih * ratio);
+      }
+    } else if (topVideo) {
+      try {
+        const vw = topVideo.videoWidth || W;
+        const vh = topVideo.videoHeight || splitY;
+        const ratio = Math.max(W / vw, splitY / vh) * (topZoom || 1.25);
+        const shiftX = (W - vw * ratio) / 2;
+        const shiftY = (splitY - vh * ratio) / 2 + (topPanY || 0);
+        ctx.drawImage(topVideo, 0, 0, vw, vh, shiftX, shiftY, vw * ratio, vh * ratio);
+      } catch (e) {
+        ctx.fillStyle = '#1e293b';
+        ctx.fillRect(0, 0, W, splitY);
+      }
+    }
+    ctx.restore();
+
+    // --- 2. Draw BOTTOM FRAME (Y: splitY -> H) ---
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0, splitY, W, H - splitY);
+    ctx.clip();
+
+    if (bottomCustomImg) {
+      const img = new window.Image();
+      img.src = bottomCustomImg;
+      if (img.complete) {
+        const iw = img.naturalWidth || W;
+        const ih = img.naturalHeight || (H - splitY);
+        const ratio = Math.max(W / iw, (H - splitY) / ih) * (bottomZoom || 1.0);
+        const shiftX = (W - iw * ratio) / 2;
+        const shiftY = splitY + ((H - splitY) - ih * ratio) / 2 + (bottomPanY || 0);
+        ctx.drawImage(img, 0, 0, iw, ih, shiftX, shiftY, iw * ratio, ih * ratio);
+      }
+    } else {
+      const bVid = (bottomVideo && bottomVideo.readyState >= 2) ? bottomVideo : topVideo;
+      if (bVid) {
+        try {
+          const bvw = bVid.videoWidth || W;
+          const bvh = bVid.videoHeight || (H - splitY);
+          const bratio = Math.max(W / bvw, (H - splitY) / bvh) * (bottomZoom || 1.0);
+          const bshiftX = (W - bvw * bratio) / 2;
+          const bshiftY = splitY + ((H - splitY) - bvh * bratio) / 2 + (bottomPanY || 0);
+          ctx.drawImage(bVid, 0, 0, bvw, bvh, bshiftX, bshiftY, bvw * bratio, bvh * bratio);
+        } catch (e) {
+          ctx.fillStyle = '#0f172a';
+          ctx.fillRect(0, splitY, W, H - splitY);
+        }
+      }
+    }
+    ctx.restore();
+
+    // --- 3. Seamless Dark Feather Vignette Across Center Seam ---
+    ctx.save();
+    const featherH = 640;
+    const grad = ctx.createLinearGradient(0, splitY - featherH / 2, 0, splitY + featherH / 2);
+    grad.addColorStop(0, 'rgba(0, 0, 0, 0)');
+    grad.addColorStop(0.2, 'rgba(0, 0, 0, 0.45)');
+    grad.addColorStop(0.5, 'rgba(0, 0, 0, 0.88)');
+    grad.addColorStop(0.8, 'rgba(0, 0, 0, 0.45)');
+    grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, splitY - featherH / 2, W, featherH);
+
+    // Subtle edge blur / vignette at top and bottom edges
+    const edgeGrad = ctx.createLinearGradient(0, 0, 0, H);
+    edgeGrad.addColorStop(0, 'rgba(0, 0, 0, 0.4)');
+    edgeGrad.addColorStop(0.12, 'rgba(0, 0, 0, 0)');
+    edgeGrad.addColorStop(0.88, 'rgba(0, 0, 0, 0)');
+    edgeGrad.addColorStop(1, 'rgba(0, 0, 0, 0.5)');
+    ctx.fillStyle = edgeGrad;
+    ctx.fillRect(0, 0, W, H);
+
+    ctx.restore();
+  };
+
+  // -------------------------------------------------------------
+  // TEMPLATE: DUAL MOMENT CENTER VIRAL 3D TYPOGRAPHY
+  // -------------------------------------------------------------
+  const renderTemplateDualMoment = (ctx, W, H) => {
+    ctx.save();
+
+    const splitY = H * (splitRatio || 0.5);
+    const finalAlign = headlineAlign !== 'auto' ? headlineAlign : 'center';
+    ctx.textAlign = finalAlign;
+    ctx.textBaseline = 'middle';
+
+    // Dynamic sizing based on headline length and user setting
+    const bigSize = Math.max(64, Math.min(106, headlineSize * 1.32));
+    ctx.font = `900 ${bigSize}px ${selectedFont.family}`;
+
+    const lines = wrapText(ctx, headline.toUpperCase(), W - 90);
+    const lineSpacing = bigSize * 1.14;
+    const totalH = lines.length * lineSpacing;
+
+    // Centered around the split seam (with user's manual offset headlinePosY)
+    let startY = splitY - (totalH / 2) + (lineSpacing * 0.45) + headlinePosY;
+    let startX = W / 2 + headlinePosX;
+    if (finalAlign === 'left') startX = 70 + headlinePosX;
+    if (finalAlign === 'right') startX = W - 70 + headlinePosX;
+
+    // Background Box if enabled by user
+    if (customBgBox) {
+      drawHeadlineBackgroundBox(ctx, lines, startX, startY - bigSize * 0.52, lineSpacing, finalAlign, W);
+    }
+
+    lines.forEach((line, i) => {
+      const y = startY + i * lineSpacing;
+      const isFirstLine = (i === 0 && lines.length > 1);
+
+      // By default: Line 1 = Pure White (#FFFFFF), Lines 2..n = Vibrant Yellow (#FFE600)
+      // If user chose customHeadlineColor, use that instead!
+      const fillColor = customHeadlineColor || (isFirstLine ? '#FFFFFF' : '#FFE600');
+      // 3D extrusion color: Crimson Red (#DC2626) for yellow, or Deep Black (#111827) for white
+      const shadowColor = isFirstLine ? '#000000' : '#DC2626';
+
+      // 1. Black outer extrusion base at y + 10
+      ctx.save();
+      ctx.strokeStyle = '#000000';
+      ctx.lineWidth = 20;
+      ctx.lineJoin = 'miter';
+      ctx.miterLimit = 2;
+      ctx.strokeText(line, startX, y + 10);
+      ctx.fillStyle = shadowColor;
+      ctx.fillText(line, startX, y + 10);
+      ctx.restore();
+
+      // 2. Front Face Heavy Black Stroke at y
+      ctx.save();
+      ctx.strokeStyle = '#000000';
+      ctx.lineWidth = 16;
+      ctx.lineJoin = 'miter';
+      ctx.miterLimit = 2;
+      ctx.strokeText(line, startX, y);
+
+      // 3. Front Face Color Fill at y
+      ctx.fillStyle = fillColor;
+      ctx.fillText(line, startX, y);
+      ctx.restore();
+    });
+
     ctx.restore();
   };
 
@@ -2129,7 +2354,7 @@ export default function ShortsThumbnailModal({
             <canvas ref={canvasRef} className="w-full h-full object-contain" />
           </div>
 
-          {/* Hidden Video for Frame Scrubbing */}
+          {/* Hidden Videos for Frame Scrubbing */}
           <video
             ref={videoRef}
             src={videoUrl}
@@ -2142,29 +2367,270 @@ export default function ShortsThumbnailModal({
             playsInline
             muted
           />
+          <video
+            ref={bottomVideoRef}
+            src={videoUrl}
+            crossOrigin="anonymous"
+            onLoadedData={drawCanvas}
+            onCanPlay={drawCanvas}
+            onSeeked={drawCanvas}
+            className="hidden"
+            playsInline
+            muted
+          />
 
-          {/* Frame Scrubber */}
-          <div className="w-full mt-3 p-3 bg-paper3 rounded-input border border-rule space-y-2">
-            <div className="flex items-center justify-between text-xs text-muted font-mono">
-              <span>⏱️ Frame Video:</span>
-              <span className="text-brass font-bold">{currentTime.toFixed(1)}s / {duration.toFixed(1)}s</span>
+          {/* Hidden file inputs for optional custom top/bottom image uploads */}
+          <input
+            type="file"
+            ref={topImgInputRef}
+            accept="image/*"
+            onChange={handleTopImgUpload}
+            className="hidden"
+          />
+          <input
+            type="file"
+            ref={bottomImgInputRef}
+            accept="image/*"
+            onChange={handleBottomImgUpload}
+            className="hidden"
+          />
+
+          {/* Frame Scrubber & Moment Selectors */}
+          {selectedTemplate === 'split-dual-moment' ? (
+            <div className="w-full mt-3 p-3 bg-paper3 rounded-input border border-brass/40 space-y-3 text-left animate-fade">
+              <div className="flex items-center justify-between pb-1.5 border-b border-rule">
+                <span className="eyebrow text-brass text-[10px] flex items-center gap-1 font-bold">
+                  <span>🎭 DUAL MOMENT CONTROLS</span>
+                </span>
+                <span className="text-[10px] text-muted font-mono">Atas & Bawah</span>
+              </div>
+
+              {/* Top Frame Moment */}
+              <div className="p-2.5 rounded-lg bg-paper border border-rule space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-semibold text-ink flex items-center gap-1">
+                    <span>⬆️ Foto Momen Atas</span>
+                    <span className="text-[10px] text-muted font-normal">(Close-up / Reaksi)</span>
+                  </span>
+                  <span className="text-brass font-mono font-bold">
+                    {topCustomImg ? 'Custom Img' : `${currentTime.toFixed(1)}s`}
+                  </span>
+                </div>
+
+                {!topCustomImg ? (
+                  <>
+                    <input
+                      type="range"
+                      min="0"
+                      max={duration || 30}
+                      step="0.1"
+                      value={currentTime}
+                      onChange={(e) => {
+                        const val = parseFloat(e.target.value);
+                        setCurrentTime(val);
+                        if (videoRef.current) videoRef.current.currentTime = val;
+                      }}
+                      className="w-full accent-brass cursor-pointer"
+                    />
+                    <div className="grid grid-cols-2 gap-2 text-[10px] text-muted pt-1">
+                      <div>
+                        <div className="flex justify-between">
+                          <span>Zoom:</span>
+                          <span className="text-ink font-mono">{topZoom.toFixed(2)}x</span>
+                        </div>
+                        <input
+                          type="range"
+                          min="1"
+                          max="2"
+                          step="0.05"
+                          value={topZoom}
+                          onChange={(e) => setTopZoom(parseFloat(e.target.value))}
+                          className="w-full accent-brass"
+                        />
+                      </div>
+                      <div>
+                        <div className="flex justify-between">
+                          <span>Posisi Y:</span>
+                          <span className="text-ink font-mono">{topPanY}px</span>
+                        </div>
+                        <input
+                          type="range"
+                          min="-150"
+                          max="150"
+                          step="5"
+                          value={topPanY}
+                          onChange={(e) => setTopPanY(parseInt(e.target.value))}
+                          className="w-full accent-brass"
+                        />
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <div className="flex items-center justify-between text-xs text-ok py-1">
+                    <span>✓ Menggunakan Foto Kustom</span>
+                    <button
+                      type="button"
+                      onClick={() => setTopCustomImg(null)}
+                      className="text-[10px] text-red-400 hover:underline cursor-pointer"
+                    >
+                      Hapus & Pakai Video
+                    </button>
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between pt-1">
+                  <button
+                    type="button"
+                    onClick={() => topImgInputRef.current?.click()}
+                    className="text-[10px] text-muted hover:text-brass flex items-center gap-1 cursor-pointer"
+                  >
+                    <Upload size={11} />
+                    <span>{topCustomImg ? 'Ganti Foto Atas' : 'Upload Foto Sendiri (Opsional)'}</span>
+                  </button>
+                  {topPanY !== 0 && (
+                    <button
+                      type="button"
+                      onClick={() => { setTopPanY(0); setTopZoom(1.25); }}
+                      className="text-[10px] text-muted hover:text-ink cursor-pointer"
+                    >
+                      Reset
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Bottom Frame Moment */}
+              <div className="p-2.5 rounded-lg bg-paper border border-rule space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-semibold text-ink flex items-center gap-1">
+                    <span>⬇️ Foto Momen Bawah</span>
+                    <span className="text-[10px] text-muted font-normal">(Wide / Suasana)</span>
+                  </span>
+                  <span className="text-brass font-mono font-bold">
+                    {bottomCustomImg ? 'Custom Img' : `${bottomTime.toFixed(1)}s`}
+                  </span>
+                </div>
+
+                {!bottomCustomImg ? (
+                  <>
+                    <input
+                      type="range"
+                      min="0"
+                      max={duration || 30}
+                      step="0.1"
+                      value={bottomTime}
+                      onChange={(e) => {
+                        const val = parseFloat(e.target.value);
+                        setBottomTime(val);
+                        if (bottomVideoRef.current) bottomVideoRef.current.currentTime = val;
+                      }}
+                      className="w-full accent-brass cursor-pointer"
+                    />
+                    <div className="grid grid-cols-2 gap-2 text-[10px] text-muted pt-1">
+                      <div>
+                        <div className="flex justify-between">
+                          <span>Zoom:</span>
+                          <span className="text-ink font-mono">{bottomZoom.toFixed(2)}x</span>
+                        </div>
+                        <input
+                          type="range"
+                          min="1"
+                          max="2"
+                          step="0.05"
+                          value={bottomZoom}
+                          onChange={(e) => setBottomZoom(parseFloat(e.target.value))}
+                          className="w-full accent-brass"
+                        />
+                      </div>
+                      <div>
+                        <div className="flex justify-between">
+                          <span>Posisi Y:</span>
+                          <span className="text-ink font-mono">{bottomPanY}px</span>
+                        </div>
+                        <input
+                          type="range"
+                          min="-150"
+                          max="150"
+                          step="5"
+                          value={bottomPanY}
+                          onChange={(e) => setBottomPanY(parseInt(e.target.value))}
+                          className="w-full accent-brass"
+                        />
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <div className="flex items-center justify-between text-xs text-ok py-1">
+                    <span>✓ Menggunakan Foto Kustom</span>
+                    <button
+                      type="button"
+                      onClick={() => setBottomCustomImg(null)}
+                      className="text-[10px] text-red-400 hover:underline cursor-pointer"
+                    >
+                      Hapus & Pakai Video
+                    </button>
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between pt-1">
+                  <button
+                    type="button"
+                    onClick={() => bottomImgInputRef.current?.click()}
+                    className="text-[10px] text-muted hover:text-brass flex items-center gap-1 cursor-pointer"
+                  >
+                    <Upload size={11} />
+                    <span>{bottomCustomImg ? 'Ganti Foto Bawah' : 'Upload Foto Sendiri (Opsional)'}</span>
+                  </button>
+                  {bottomPanY !== 0 && (
+                    <button
+                      type="button"
+                      onClick={() => { setBottomPanY(0); setBottomZoom(1.0); }}
+                      className="text-[10px] text-muted hover:text-ink cursor-pointer"
+                    >
+                      Reset
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Center Seam Split Ratio */}
+              <div className="p-2 bg-paper/60 rounded-lg border border-rule/60 flex items-center justify-between text-xs text-muted">
+                <span className="text-[11px]">Batas Tengah: {Math.round(splitRatio * 100)}%</span>
+                <input
+                  type="range"
+                  min="0.4"
+                  max="0.6"
+                  step="0.02"
+                  value={splitRatio}
+                  onChange={(e) => setSplitRatio(parseFloat(e.target.value))}
+                  className="w-32 accent-brass cursor-pointer"
+                />
+              </div>
             </div>
-            <input
-              type="range"
-              min="0"
-              max={duration || 30}
-              step="0.1"
-              value={currentTime}
-              onChange={(e) => {
-                const val = parseFloat(e.target.value);
-                setCurrentTime(val);
-                if (videoRef.current) {
-                  videoRef.current.currentTime = val;
-                }
-              }}
-              className="w-full accent-brass cursor-pointer"
-            />
-          </div>
+          ) : (
+            /* Single Frame Scrubber for other templates */
+            <div className="w-full mt-3 p-3 bg-paper3 rounded-input border border-rule space-y-2">
+              <div className="flex items-center justify-between text-xs text-muted font-mono">
+                <span>⏱️ Frame Video:</span>
+                <span className="text-brass font-bold">{currentTime.toFixed(1)}s / {duration.toFixed(1)}s</span>
+              </div>
+              <input
+                type="range"
+                min="0"
+                max={duration || 30}
+                step="0.1"
+                value={currentTime}
+                onChange={(e) => {
+                  const val = parseFloat(e.target.value);
+                  setCurrentTime(val);
+                  if (videoRef.current) {
+                    videoRef.current.currentTime = val;
+                  }
+                }}
+                className="w-full accent-brass cursor-pointer"
+              />
+            </div>
+          )}
 
           {/* Notification Messages */}
           {introBurnSuccess && (
