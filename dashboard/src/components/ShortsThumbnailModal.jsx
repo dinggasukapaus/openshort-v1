@@ -4,7 +4,7 @@ import {
   Download, Sparkles, Image, RefreshCw, X, Upload, Check, Type, 
   Eye, Trash2, Search, Sliders, Volume2, Play, VolumeX, AlertCircle, 
   Loader2, Music, Clapperboard, Layout, Palette, Tag, ShieldAlert,
-  Flame, Radio, Film, Layers, Award
+  Flame, Radio, Film, Layers, Award, RotateCcw
 } from 'lucide-react';
 import { apiFetch } from '../lib/api';
 
@@ -149,6 +149,25 @@ export default function ShortsThumbnailModal({
     initialHook || initialTitle || "Pelajari strategi viral algoritma terbaru untuk mempercepat pertumbuhan akun Anda."
   );
 
+  // Manual Headline Layout & Style Overrides
+  const [headlinePosY, setHeadlinePosY] = useState(0); // Offset in px: -400 to +700
+  const [headlinePosX, setHeadlinePosX] = useState(0); // Offset in px: -300 to +300
+  const [headlineAlign, setHeadlineAlign] = useState('auto'); // 'auto' | 'left' | 'center' | 'right'
+  const [customHeadlineColor, setCustomHeadlineColor] = useState(''); // '' means auto/template default
+  const [customBgColor, setCustomBgColor] = useState(''); // '' means auto/template default
+  const [customBgBox, setCustomBgBox] = useState(false); // Enable explicit background box/highlight
+  const [bgBoxOpacity, setBgBoxOpacity] = useState(85); // 20 to 100%
+
+  const resetHeadlineLayout = () => {
+    setHeadlinePosY(0);
+    setHeadlinePosX(0);
+    setHeadlineAlign('auto');
+    setCustomHeadlineColor('');
+    setCustomBgColor('');
+    setCustomBgBox(false);
+    setBgBoxOpacity(85);
+  };
+
   // Curve Style for Meta template
   const [curveStyle, setCurveStyle] = useState('arch'); // 'arch', 'wave', 'slant', 'straight'
 
@@ -245,8 +264,62 @@ export default function ShortsThumbnailModal({
   }, [
     selectedTemplate, selectedColor, selectedFont, selectedSticker, pillText, 
     headline, headlineSize, showBottomCard, cardEyebrow, cardText, curveStyle, 
-    vignetteDim, highlightText, borderFrame, channelLogo, logoPlacement, currentTime, videoLoaded
+    vignetteDim, highlightText, borderFrame, channelLogo, logoPlacement, currentTime, videoLoaded,
+    headlinePosY, headlinePosX, headlineAlign, customHeadlineColor, customBgColor, customBgBox, bgBoxOpacity
   ]);
+
+  // Helper: Hex color to RGBA string
+  const hexToRgba = (hex, alpha = 1) => {
+    if (!hex) return `rgba(0,0,0,${alpha})`;
+    let c = hex.replace('#', '');
+    if (c.length === 3) c = c.split('').map((x) => x + x).join('');
+    const r = parseInt(c.substring(0, 2), 16) || 0;
+    const g = parseInt(c.substring(2, 4), 16) || 0;
+    const b = parseInt(c.substring(4, 6), 16) || 0;
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  };
+
+  // Helper: Draw background box behind headline lines
+  const drawHeadlineBackgroundBox = (ctx, lines, startX, startY, lineHeight, align, W) => {
+    if (!lines || lines.length === 0) return;
+    ctx.save();
+    const padX = 32;
+    const padY = 20;
+    const radius = 18;
+    const fillCol = customBgColor ? hexToRgba(customBgColor, bgBoxOpacity / 100) : `rgba(0, 0, 0, ${bgBoxOpacity / 100})`;
+
+    ctx.fillStyle = fillCol;
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.55)';
+    ctx.shadowBlur = 24;
+    ctx.shadowOffsetY = 6;
+
+    let maxLineWidth = 0;
+    for (const l of lines) {
+      const lw = ctx.measureText(l).width;
+      if (lw > maxLineWidth) maxLineWidth = lw;
+    }
+
+    const totalHeight = lines.length * lineHeight;
+    let boxX = startX;
+    if (align === 'center') {
+      boxX = startX - maxLineWidth / 2 - padX;
+    } else if (align === 'right') {
+      boxX = startX - maxLineWidth - padX;
+    } else {
+      boxX = startX - padX;
+    }
+
+    ctx.beginPath();
+    ctx.roundRect(boxX, startY - padY, maxLineWidth + padX * 2, totalHeight + padY * 2, radius);
+    ctx.fill();
+
+    // Subtle border on custom box
+    ctx.strokeStyle = customHeadlineColor ? hexToRgba(customHeadlineColor, 0.4) : 'rgba(255, 255, 255, 0.25)';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    ctx.restore();
+  };
 
   // Helper: Text Wrapping
   const wrapText = (ctx, text, maxWidth) => {
@@ -385,7 +458,7 @@ export default function ShortsThumbnailModal({
   const renderTemplateMetaCard = (ctx, W, H) => {
     // Top colored banner
     ctx.save();
-    ctx.fillStyle = selectedColor.color;
+    ctx.fillStyle = customBgColor || selectedColor.color;
     ctx.beginPath();
     ctx.moveTo(0, 0);
     ctx.lineTo(W, 0);
@@ -464,20 +537,30 @@ export default function ShortsThumbnailModal({
 
     // Headline Text
     ctx.save();
-    ctx.fillStyle = selectedColor.text;
+    ctx.fillStyle = customHeadlineColor || selectedColor.text;
     ctx.font = `800 ${headlineSize}px ${selectedFont.family}`;
     ctx.textBaseline = 'top';
-    ctx.textAlign = 'left';
+
+    const finalAlign = headlineAlign !== 'auto' ? headlineAlign : 'left';
+    ctx.textAlign = finalAlign;
 
     const headlineLines = wrapText(ctx, headline, W - 140);
-    let headlineY = 240;
     const lineSpacing = headlineSize * 1.22;
+    let headlineY = 240 + headlinePosY;
+
+    let headlineX = 60 + headlinePosX;
+    if (finalAlign === 'center') headlineX = W / 2 + headlinePosX;
+    if (finalAlign === 'right') headlineX = W - 60 + headlinePosX;
+
+    if (customBgBox) {
+      drawHeadlineBackgroundBox(ctx, headlineLines, headlineX, headlineY, lineSpacing, finalAlign, W);
+    }
 
     for (const line of headlineLines) {
-      ctx.shadowColor = 'rgba(0, 0, 0, 0.35)';
-      ctx.shadowBlur = 8;
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.45)';
+      ctx.shadowBlur = 10;
       ctx.shadowOffsetY = 4;
-      ctx.fillText(line, 60, headlineY);
+      ctx.fillText(line, headlineX, headlineY);
       headlineY += lineSpacing;
     }
     ctx.restore();
@@ -555,23 +638,36 @@ export default function ShortsThumbnailModal({
     }
 
     // Huge Hormozi Headline in center-top area
-    ctx.textAlign = 'center';
+    const finalAlign = headlineAlign !== 'auto' ? headlineAlign : 'center';
+    ctx.textAlign = finalAlign;
     ctx.textBaseline = 'middle';
     const bigSize = Math.max(68, Math.min(102, headlineSize * 1.35));
     ctx.font = `900 ${bigSize}px ${selectedFont.family}`;
 
     const lines = wrapText(ctx, headline.toUpperCase(), W - 120);
-    const totalH = lines.length * bigSize * 1.18;
-    let startY = 380 + (400 - totalH) / 2;
+    const lineSpacing = bigSize * 1.18;
+    const totalH = lines.length * lineSpacing;
+    let startY = 380 + (400 - totalH) / 2 + headlinePosY;
+
+    let startX = W / 2 + headlinePosX;
+    if (finalAlign === 'left') startX = 80 + headlinePosX;
+    if (finalAlign === 'right') startX = W - 80 + headlinePosX;
+
+    if (customBgBox) {
+      drawHeadlineBackgroundBox(ctx, lines, startX, startY - bigSize * 0.55, lineSpacing, finalAlign, W);
+    }
 
     lines.forEach((line, i) => {
-      const y = startY + i * bigSize * 1.18;
+      const y = startY + i * lineSpacing;
 
       // Optional highlighter box behind words
-      if (highlightText) {
+      if (highlightText && !customBgBox) {
         const lineW = ctx.measureText(line).width + 40;
-        ctx.fillStyle = i % 2 === 0 ? selectedColor.color : '#FFFFFF';
-        ctx.fillRect((W - lineW) / 2, y - bigSize * 0.55, lineW, bigSize * 1.05);
+        ctx.fillStyle = customBgColor || (i % 2 === 0 ? selectedColor.color : '#FFFFFF');
+        let hBoxX = (W - lineW) / 2 + headlinePosX;
+        if (finalAlign === 'left') hBoxX = startX - 20;
+        if (finalAlign === 'right') hBoxX = startX - lineW + 20;
+        ctx.fillRect(hBoxX, y - bigSize * 0.55, lineW, bigSize * 1.05);
       }
 
       // Thick black stroke for 100% pop
@@ -579,17 +675,19 @@ export default function ShortsThumbnailModal({
       ctx.lineWidth = 14;
       ctx.lineJoin = 'miter';
       ctx.miterLimit = 2;
-      ctx.strokeText(line, W / 2, y);
+      ctx.strokeText(line, startX, y);
 
       // Fill text
-      ctx.fillStyle = highlightText
-        ? (i % 2 === 0 ? selectedColor.text : '#000000')
-        : (i % 2 === 0 ? selectedColor.color : '#FFFFFF');
+      ctx.fillStyle = customHeadlineColor || (
+        highlightText
+          ? (i % 2 === 0 ? selectedColor.text : '#000000')
+          : (i % 2 === 0 ? selectedColor.color : '#FFFFFF')
+      );
 
       ctx.shadowColor = 'rgba(0,0,0,0.85)';
       ctx.shadowBlur = 24;
       ctx.shadowOffsetY = 8;
-      ctx.fillText(line, W / 2, y);
+      ctx.fillText(line, startX, y);
     });
 
     // Bottom Hook Card / Subtitle
@@ -624,7 +722,7 @@ export default function ShortsThumbnailModal({
   const renderTemplateBreakingNews = (ctx, W, H) => {
     ctx.save();
     // Top Breaking News Banner Bar
-    ctx.fillStyle = '#E50914';
+    ctx.fillStyle = customBgColor || '#E50914';
     ctx.fillRect(0, 0, W, 140);
 
     // Blinking dot + Title
@@ -645,14 +743,15 @@ export default function ShortsThumbnailModal({
     ctx.fillText('🔴 LIVE UPDATE', W - 60, 70);
 
     // News Chyron Box for Headline
-    const boxY = 180;
+    const boxY = 180 + headlinePosY;
     const boxW = W - 100;
-    const boxX = 50;
+    const boxX = 50 + headlinePosX;
     const lines = wrapText(ctx, headline, boxW - 80);
     const boxH = Math.max(220, lines.length * 70 + 80);
 
-    ctx.fillStyle = 'rgba(15, 23, 42, 0.92)';
-    ctx.strokeStyle = '#E50914';
+    const boxBg = customBgColor ? hexToRgba(customBgColor, bgBoxOpacity / 100) : 'rgba(15, 23, 42, 0.92)';
+    ctx.fillStyle = boxBg;
+    ctx.strokeStyle = customBgColor || '#E50914';
     ctx.lineWidth = 8;
     ctx.shadowColor = 'rgba(0,0,0,0.6)';
     ctx.shadowBlur = 20;
@@ -662,13 +761,18 @@ export default function ShortsThumbnailModal({
     ctx.stroke();
 
     // Headline inside box
-    ctx.fillStyle = '#FFFFFF';
-    ctx.font = `800 ${headlineSize}px ${selectedFont.family}`;
-    ctx.textAlign = 'left';
+    const finalAlign = headlineAlign !== 'auto' ? headlineAlign : 'left';
+    ctx.textAlign = finalAlign;
     ctx.textBaseline = 'top';
+    ctx.fillStyle = customHeadlineColor || '#FFFFFF';
+    ctx.font = `800 ${headlineSize}px ${selectedFont.family}`;
+
+    let textX = boxX + 40;
+    if (finalAlign === 'center') textX = boxX + boxW / 2;
+    if (finalAlign === 'right') textX = boxX + boxW - 40;
 
     lines.forEach((l, i) => {
-      ctx.fillText(l, boxX + 40, boxY + 40 + i * (headlineSize * 1.2));
+      ctx.fillText(l, textX, boxY + 40 + i * (headlineSize * 1.2));
     });
 
     // Bottom Ticker Banner
@@ -713,24 +817,37 @@ export default function ShortsThumbnailModal({
     ctx.fillText('🎙️ ' + (pillText || 'PODCAST HIGHLIGHT'), 86, 135);
 
     // Large Quotation Mark
-    ctx.fillStyle = selectedColor.color;
+    ctx.fillStyle = customBgColor || selectedColor.color;
     ctx.font = '900 160px Georgia, serif';
     ctx.textBaseline = 'top';
-    ctx.fillText('“', 60, 220);
+    ctx.fillText('“', 60 + headlinePosX, 220 + headlinePosY);
 
     // Quote Content Box
-    const quoteY = 320;
+    const quoteY = 320 + headlinePosY;
     const quoteW = W - 140;
     ctx.font = `800 ${Math.max(48, headlineSize)}px ${selectedFont.family}`;
-    ctx.fillStyle = '#FFFFFF';
+    ctx.fillStyle = customHeadlineColor || '#FFFFFF';
     ctx.shadowColor = 'rgba(0,0,0,0.8)';
     ctx.shadowBlur = 16;
 
+    const finalAlign = headlineAlign !== 'auto' ? headlineAlign : 'left';
+    ctx.textAlign = finalAlign;
+
+    let startX = 80 + headlinePosX;
+    if (finalAlign === 'center') startX = W / 2 + headlinePosX;
+    if (finalAlign === 'right') startX = W - 80 + headlinePosX;
+
     const qLines = wrapText(ctx, headline, quoteW);
+    const lineSpacing = headlineSize * 1.25;
+
+    if (customBgBox) {
+      drawHeadlineBackgroundBox(ctx, qLines, startX, quoteY, lineSpacing, finalAlign, W);
+    }
+
     let qY = quoteY;
     qLines.forEach((ql) => {
-      ctx.fillText(ql, 80, qY);
-      qY += headlineSize * 1.25;
+      ctx.fillText(ql, startX, qY);
+      qY += lineSpacing;
     });
 
     // Speaker Name Card at Bottom
@@ -776,28 +893,46 @@ export default function ShortsThumbnailModal({
 
     // Bottom Third Gradient
     const bGrad = ctx.createLinearGradient(0, H - 850, 0, H);
-    bGrad.addColorStop(0, 'rgba(0,0,0,0)');
-    bGrad.addColorStop(0.5, 'rgba(0,0,0,0.85)');
-    bGrad.addColorStop(1, '#000000');
+    if (customBgColor) {
+      bGrad.addColorStop(0, 'rgba(0,0,0,0)');
+      bGrad.addColorStop(0.5, hexToRgba(customBgColor, (bgBoxOpacity / 100) * 0.85));
+      bGrad.addColorStop(1, hexToRgba(customBgColor, bgBoxOpacity / 100));
+    } else {
+      bGrad.addColorStop(0, 'rgba(0,0,0,0)');
+      bGrad.addColorStop(0.5, 'rgba(0,0,0,0.85)');
+      bGrad.addColorStop(1, '#000000');
+    }
     ctx.fillStyle = bGrad;
     ctx.fillRect(0, H - 850, W, 850);
 
     // Headline in Bottom Third
-    ctx.fillStyle = '#FFFFFF';
+    ctx.fillStyle = customHeadlineColor || '#FFFFFF';
     ctx.font = `800 ${headlineSize}px ${selectedFont.family}`;
     ctx.textBaseline = 'bottom';
-    ctx.textAlign = 'left';
+    const finalAlign = headlineAlign !== 'auto' ? headlineAlign : 'left';
+    ctx.textAlign = finalAlign;
+
+    let startX = 70 + headlinePosX;
+    if (finalAlign === 'center') startX = W / 2 + headlinePosX;
+    if (finalAlign === 'right') startX = W - 70 + headlinePosX;
 
     const lines = wrapText(ctx, headline, W - 140);
-    let curY = H - 280;
+    const lineSpacing = headlineSize * 1.2;
+    let curY = (H - 280) + headlinePosY;
+
+    if (customBgBox) {
+      const topY = curY - (lines.length * lineSpacing);
+      drawHeadlineBackgroundBox(ctx, lines, startX, topY, lineSpacing, finalAlign, W);
+    }
+
     for (let i = lines.length - 1; i >= 0; i--) {
-      ctx.fillText(lines[i], 70, curY);
-      curY -= headlineSize * 1.2;
+      ctx.fillText(lines[i], startX, curY);
+      curY -= lineSpacing;
     }
 
     // Subtitle text line
     if (showBottomCard && cardText) {
-      ctx.fillStyle = selectedColor.color;
+      ctx.fillStyle = customBgColor || selectedColor.color;
       ctx.font = `700 32px ${selectedFont.family}`;
       ctx.fillText(cardText.slice(0, 60), 70, H - 180);
     }
@@ -833,26 +968,37 @@ export default function ShortsThumbnailModal({
     // Headline with Neon Highlighter Boxes
     ctx.font = `900 ${headlineSize}px ${selectedFont.family}`;
     ctx.textBaseline = 'top';
-    ctx.textAlign = 'left';
+    const finalAlign = headlineAlign !== 'auto' ? headlineAlign : 'left';
+    ctx.textAlign = finalAlign;
 
     const lines = wrapText(ctx, headline, W - 140);
-    let startY = 320;
+    let startY = 320 + headlinePosY;
 
     lines.forEach((line, idx) => {
       const lineW = ctx.measureText(line).width + 36;
       const boxH = headlineSize * 1.25;
 
+      let boxX = 70 + headlinePosX;
+      let textX = 88 + headlinePosX;
+      if (finalAlign === 'center') {
+        boxX = (W - lineW) / 2 + headlinePosX;
+        textX = W / 2 + headlinePosX;
+      } else if (finalAlign === 'right') {
+        boxX = W - lineW - 70 + headlinePosX;
+        textX = W - 70 - 18 + headlinePosX;
+      }
+
       // Drop shadow box
       ctx.fillStyle = '#000000';
-      ctx.fillRect(74, startY + 6, lineW, boxH);
+      ctx.fillRect(boxX + 4, startY + 6, lineW, boxH);
 
       // Bright colored marker box
-      ctx.fillStyle = idx % 2 === 0 ? selectedColor.color : '#FFFFFF';
-      ctx.fillRect(70, startY, lineW, boxH);
+      ctx.fillStyle = customBgColor || (idx % 2 === 0 ? selectedColor.color : '#FFFFFF');
+      ctx.fillRect(boxX, startY, lineW, boxH);
 
       // Text inside box
-      ctx.fillStyle = idx % 2 === 0 ? selectedColor.text : '#000000';
-      ctx.fillText(line, 88, startY + (boxH - headlineSize) / 2);
+      ctx.fillStyle = customHeadlineColor || (idx % 2 === 0 ? selectedColor.text : '#000000');
+      ctx.fillText(line, textX, startY + (boxH - headlineSize) / 2);
 
       startY += boxH + 16;
     });
@@ -882,7 +1028,7 @@ export default function ShortsThumbnailModal({
   const renderTemplateSplitComparison = (ctx, W, H) => {
     ctx.save();
     // Top Banner
-    ctx.fillStyle = selectedColor.color;
+    ctx.fillStyle = customBgColor || selectedColor.color;
     ctx.fillRect(0, 0, W, 360);
 
     ctx.fillStyle = selectedColor.text;
@@ -891,10 +1037,24 @@ export default function ShortsThumbnailModal({
     ctx.textBaseline = 'middle';
     ctx.fillText((pillText || 'CARA LAMA vs CARA BARU').toUpperCase(), W / 2, 110);
 
+    ctx.fillStyle = customHeadlineColor || '#FFFFFF';
     ctx.font = `800 ${headlineSize * 0.9}px ${selectedFont.family}`;
+    const finalAlign = headlineAlign !== 'auto' ? headlineAlign : 'center';
+    ctx.textAlign = finalAlign;
+
+    let startX = W / 2 + headlinePosX;
+    if (finalAlign === 'left') startX = 80 + headlinePosX;
+    if (finalAlign === 'right') startX = W - 80 + headlinePosX;
+
     const topLines = wrapText(ctx, headline, W - 160);
+    const lineSpacing = headlineSize * 0.95;
+
+    if (customBgBox) {
+      drawHeadlineBackgroundBox(ctx, topLines, startX, 210 + headlinePosY, lineSpacing, finalAlign, W);
+    }
+
     topLines.slice(0, 2).forEach((tl, i) => {
-      ctx.fillText(tl, W / 2, 210 + i * (headlineSize * 0.95));
+      ctx.fillText(tl, startX, 210 + headlinePosY + i * lineSpacing);
     });
 
     // Center "VS" Emblem
@@ -947,10 +1107,17 @@ export default function ShortsThumbnailModal({
 
     // Dark indigo/navy base gradient with smooth bottom fade
     const bgGrad = ctx.createLinearGradient(0, 0, 0, headerH);
-    bgGrad.addColorStop(0, 'rgba(10, 16, 36, 0.96)');
-    bgGrad.addColorStop(0.65, 'rgba(15, 23, 42, 0.92)');
-    bgGrad.addColorStop(0.85, 'rgba(15, 23, 42, 0.60)');
-    bgGrad.addColorStop(1, 'rgba(15, 23, 42, 0.0)');
+    if (customBgColor) {
+      bgGrad.addColorStop(0, hexToRgba(customBgColor, (bgBoxOpacity / 100) * 0.96));
+      bgGrad.addColorStop(0.65, hexToRgba(customBgColor, (bgBoxOpacity / 100) * 0.92));
+      bgGrad.addColorStop(0.85, hexToRgba(customBgColor, (bgBoxOpacity / 100) * 0.60));
+      bgGrad.addColorStop(1, hexToRgba(customBgColor, 0.0));
+    } else {
+      bgGrad.addColorStop(0, 'rgba(10, 16, 36, 0.96)');
+      bgGrad.addColorStop(0.65, 'rgba(15, 23, 42, 0.92)');
+      bgGrad.addColorStop(0.85, 'rgba(15, 23, 42, 0.60)');
+      bgGrad.addColorStop(1, 'rgba(15, 23, 42, 0.0)');
+    }
 
     ctx.fillStyle = bgGrad;
     ctx.fillRect(0, 0, W, headerH);
@@ -1035,38 +1202,47 @@ export default function ShortsThumbnailModal({
     const tier1Size = Math.max(40, Math.min(64, Math.round(headlineSize * 0.75)));
 
     ctx.font = `800 ${tier1Size}px ${selectedFont.family}`;
-    ctx.textAlign = 'center';
+    const finalAlign = headlineAlign !== 'auto' ? headlineAlign : 'center';
+    ctx.textAlign = finalAlign;
     ctx.textBaseline = 'middle';
 
-    const tier1Y = stickerObj && stickerObj.id !== 'none' ? 180 : 160;
+    let startX = W / 2 + headlinePosX;
+    if (finalAlign === 'left') startX = 80 + headlinePosX;
+    if (finalAlign === 'right') startX = W - 80 + headlinePosX;
+
+    const tier1Y = (stickerObj && stickerObj.id !== 'none' ? 180 : 160) + headlinePosY;
 
     // Text drop shadow & subtle stroke for 100% legibility
     ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
     ctx.shadowBlur = 18;
     ctx.shadowOffsetY = 4;
-    ctx.fillStyle = '#FFFFFF';
-    ctx.fillText(tier1Text, W / 2, tier1Y);
+    ctx.fillStyle = customHeadlineColor || '#FFFFFF';
+    ctx.fillText(tier1Text, startX, tier1Y);
 
     // Tier 2: Giant Ultra-Bold Keyword / Question (e.g. "HIJAB?")
     const tier2Text = (headline || 'HIJAB?').toUpperCase();
     const tier2Size = Math.max(88, Math.min(150, Math.round(headlineSize * 1.7)));
 
     ctx.font = `900 ${tier2Size}px ${selectedFont.family}`;
-    ctx.textAlign = 'center';
+    ctx.textAlign = finalAlign;
     ctx.textBaseline = 'middle';
 
     const tier2Y = tier1Y + tier1Size * 0.6 + tier2Size * 0.55 + 16;
 
+    if (customBgBox) {
+      drawHeadlineBackgroundBox(ctx, [tier2Text], startX, tier2Y - tier2Size * 0.5, tier2Size, finalAlign, W);
+    }
+
     // Heavy outline + deep shadow for pop
     ctx.strokeStyle = '#000000';
     ctx.lineWidth = 12;
-    ctx.strokeText(tier2Text, W / 2, tier2Y);
+    ctx.strokeText(tier2Text, startX, tier2Y);
 
     ctx.shadowColor = 'rgba(0, 0, 0, 0.95)';
     ctx.shadowBlur = 24;
     ctx.shadowOffsetY = 6;
-    ctx.fillStyle = '#FFFFFF';
-    ctx.fillText(tier2Text, W / 2, tier2Y);
+    ctx.fillStyle = customHeadlineColor || '#FFFFFF';
+    ctx.fillText(tier2Text, startX, tier2Y);
 
     // Reset shadow
     ctx.shadowColor = 'transparent';
@@ -1076,8 +1252,11 @@ export default function ShortsThumbnailModal({
     // Technical cyan blueprint line accent below title
     const accentW = Math.min(320, Math.max(140, ctx.measureText(tier2Text).width * 0.45));
     const accentY = tier2Y + tier2Size * 0.55 + 18;
-    ctx.fillStyle = '#38BDF8';
-    ctx.fillRect((W - accentW) / 2, accentY, accentW, 4);
+    ctx.fillStyle = customBgColor || '#38BDF8';
+    let accentX = (W - accentW) / 2 + headlinePosX;
+    if (finalAlign === 'left') accentX = 80 + headlinePosX;
+    if (finalAlign === 'right') accentX = W - 80 - accentW + headlinePosX;
+    ctx.fillRect(accentX, accentY, accentW, 4);
 
     // 5. Bottom Subtitle / Hook Card (Optional)
     if (showBottomCard && cardText) {
@@ -1552,6 +1731,260 @@ export default function ShortsThumbnailModal({
                 className="w-full bg-paper border border-rule rounded-input p-2.5 text-xs text-ink focus:outline-none focus:border-brass font-bold"
                 placeholder="Tulis judul yang memicu rasa penasaran penonton..."
               />
+            </div>
+
+            {/* 6.1. TATA LETAK & WARNA MANUAL HEADLINE */}
+            <div className="p-3.5 bg-paper2 rounded-card border border-rule space-y-3">
+              <div className="flex items-center justify-between">
+                <label className="eyebrow text-brass flex items-center gap-1.5 font-bold">
+                  <Sliders size={13} /> ATUR TATA LETAK & WARNA HEADLINE (MANUAL)
+                </label>
+                {(headlinePosY !== 0 || headlinePosX !== 0 || headlineAlign !== 'auto' || customHeadlineColor || customBgColor || customBgBox) && (
+                  <button
+                    type="button"
+                    onClick={resetHeadlineLayout}
+                    className="text-[10px] text-muted hover:text-ink flex items-center gap-1 cursor-pointer underline"
+                  >
+                    <RotateCcw size={10} /> Reset Default
+                  </button>
+                )}
+              </div>
+
+              {/* A. Posisi Y & X Sliders */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* Posisi Y */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-muted font-medium">Posisi Vertikal (Y):</span>
+                    <span className="font-mono text-brass text-[11px]">
+                      {headlinePosY === 0 ? '0 (Auto)' : `${headlinePosY > 0 ? '+' : ''}${headlinePosY}px`}
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min="-400"
+                    max="700"
+                    step="10"
+                    value={headlinePosY}
+                    onChange={(e) => setHeadlinePosY(parseInt(e.target.value))}
+                    className="w-full accent-brass cursor-pointer"
+                  />
+                  <div className="flex justify-between gap-1 pt-0.5">
+                    <button
+                      type="button"
+                      onClick={() => setHeadlinePosY(-180)}
+                      className={`btn-quiet py-0.5 px-1.5 text-[10px] rounded cursor-pointer ${
+                        headlinePosY === -180 ? 'bg-brass/20 text-brass border border-brass' : ''
+                      }`}
+                    >
+                      ⬆️ Atas
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setHeadlinePosY(0)}
+                      className={`btn-quiet py-0.5 px-1.5 text-[10px] rounded cursor-pointer ${
+                        headlinePosY === 0 ? 'bg-brass/20 text-brass border border-brass' : ''
+                      }`}
+                    >
+                      Auto
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setHeadlinePosY(280)}
+                      className={`btn-quiet py-0.5 px-1.5 text-[10px] rounded cursor-pointer ${
+                        headlinePosY === 280 ? 'bg-brass/20 text-brass border border-brass' : ''
+                      }`}
+                    >
+                      ⏺️ Tengah
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setHeadlinePosY(650)}
+                      className={`btn-quiet py-0.5 px-1.5 text-[10px] rounded cursor-pointer ${
+                        headlinePosY === 650 ? 'bg-brass/20 text-brass border border-brass' : ''
+                      }`}
+                    >
+                      ⬇️ Bawah
+                    </button>
+                  </div>
+                </div>
+
+                {/* Posisi X & Alignment */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-muted font-medium">Posisi Horizontal (X):</span>
+                    <span className="font-mono text-brass text-[11px]">
+                      {headlinePosX === 0 ? '0 (Tengah)' : `${headlinePosX > 0 ? '+' : ''}${headlinePosX}px`}
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min="-300"
+                    max="300"
+                    step="10"
+                    value={headlinePosX}
+                    onChange={(e) => setHeadlinePosX(parseInt(e.target.value))}
+                    className="w-full accent-brass cursor-pointer"
+                  />
+                  {/* Alignment buttons */}
+                  <div className="grid grid-cols-4 gap-1 pt-0.5">
+                    {[
+                      { id: 'auto', label: 'Auto' },
+                      { id: 'left', label: '⬅️ Kiri' },
+                      { id: 'center', label: '↔️ Tengah' },
+                      { id: 'right', label: '➡️ Kanan' },
+                    ].map((al) => (
+                      <button
+                        key={al.id}
+                        type="button"
+                        onClick={() => setHeadlineAlign(al.id)}
+                        className={`py-0.5 px-1 text-[10px] rounded border transition-all cursor-pointer text-center font-medium ${
+                          headlineAlign === al.id
+                            ? 'border-brass bg-brass/20 text-brass font-bold'
+                            : 'border-rule bg-paper text-muted hover:text-ink'
+                        }`}
+                      >
+                        {al.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* B. Warna Teks & Warna Background */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-rule/60">
+                {/* Warna Teks */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-muted font-medium">🎨 Warna Teks:</span>
+                    {customHeadlineColor && (
+                      <button
+                        type="button"
+                        onClick={() => setCustomHeadlineColor('')}
+                        className="text-[10px] text-brass hover:underline cursor-pointer"
+                      >
+                        Reset Auto
+                      </button>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <label className="relative w-8 h-8 rounded-input border border-rule cursor-pointer overflow-hidden shrink-0 shadow-xs">
+                      <div
+                        className="w-full h-full"
+                        style={{ backgroundColor: customHeadlineColor || selectedColor.text || '#FFFFFF' }}
+                      />
+                      <input
+                        type="color"
+                        value={customHeadlineColor || selectedColor.text || '#FFFFFF'}
+                        onChange={(e) => setCustomHeadlineColor(e.target.value)}
+                        className="absolute inset-0 opacity-0 cursor-pointer"
+                      />
+                    </label>
+                    <input
+                      type="text"
+                      value={customHeadlineColor}
+                      onChange={(e) => setCustomHeadlineColor(e.target.value)}
+                      placeholder="Auto (dari tema)"
+                      className="flex-1 bg-paper border border-rule rounded-input px-2.5 py-1.5 text-xs text-ink font-mono"
+                    />
+                  </div>
+                  {/* Fast Text Swatches */}
+                  <div className="flex items-center gap-1.5 pt-0.5">
+                    {['#FFFFFF', '#FFE600', '#F59E0B', '#EF4444', '#10B981', '#06B6D4', '#000000'].map((c) => (
+                      <button
+                        key={c}
+                        type="button"
+                        onClick={() => setCustomHeadlineColor(c)}
+                        className={`w-5 h-5 rounded-full border border-white/30 cursor-pointer transition-transform hover:scale-110 ${
+                          customHeadlineColor === c ? 'ring-2 ring-brass ring-offset-1 ring-offset-paper' : ''
+                        }`}
+                        style={{ backgroundColor: c }}
+                        title={c}
+                      />
+                    ))}
+                  </div>
+                </div>
+
+                {/* Warna Background */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-muted font-medium">🖼️ Warna Background Box/Banner:</span>
+                    {customBgColor && (
+                      <button
+                        type="button"
+                        onClick={() => setCustomBgColor('')}
+                        className="text-[10px] text-brass hover:underline cursor-pointer"
+                      >
+                        Reset Auto
+                      </button>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <label className="relative w-8 h-8 rounded-input border border-rule cursor-pointer overflow-hidden shrink-0 shadow-xs">
+                      <div
+                        className="w-full h-full"
+                        style={{ backgroundColor: customBgColor || selectedColor.color || '#000000' }}
+                      />
+                      <input
+                        type="color"
+                        value={customBgColor || selectedColor.color || '#000000'}
+                        onChange={(e) => setCustomBgColor(e.target.value)}
+                        className="absolute inset-0 opacity-0 cursor-pointer"
+                      />
+                    </label>
+                    <input
+                      type="text"
+                      value={customBgColor}
+                      onChange={(e) => setCustomBgColor(e.target.value)}
+                      placeholder="Auto (dari tema)"
+                      className="flex-1 bg-paper border border-rule rounded-input px-2.5 py-1.5 text-xs text-ink font-mono"
+                    />
+                  </div>
+                  {/* Fast Background Swatches */}
+                  <div className="flex items-center gap-1.5 pt-0.5">
+                    {['#000000', '#0F172A', '#1E3A8A', '#991B1B', '#065F46', '#7C3AED', '#F59E0B'].map((c) => (
+                      <button
+                        key={c}
+                        type="button"
+                        onClick={() => setCustomBgColor(c)}
+                        className={`w-5 h-5 rounded-full border border-white/30 cursor-pointer transition-transform hover:scale-110 ${
+                          customBgColor === c ? 'ring-2 ring-brass ring-offset-1 ring-offset-paper' : ''
+                        }`}
+                        style={{ backgroundColor: c }}
+                        title={c}
+                      />
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* C. Kotak Highlight / Background Box Teks Toggle & Opacity */}
+              <div className="pt-2 border-t border-rule/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                <label className="flex items-center gap-2 cursor-pointer text-ink font-semibold">
+                  <input
+                    type="checkbox"
+                    checked={customBgBox}
+                    onChange={(e) => setCustomBgBox(e.target.checked)}
+                    className="rounded text-brass focus:ring-brass cursor-pointer"
+                  />
+                  <span>Tampilkan Kotak Background di Belakang Teks</span>
+                </label>
+
+                {customBgBox && (
+                  <div className="flex items-center gap-2 animate-fade">
+                    <span className="text-muted text-[11px]">Transparansi Box:</span>
+                    <input
+                      type="range"
+                      min="20"
+                      max="100"
+                      value={bgBoxOpacity}
+                      onChange={(e) => setBgBoxOpacity(parseInt(e.target.value))}
+                      className="w-24 accent-brass cursor-pointer"
+                    />
+                    <span className="font-mono text-brass text-[11px] w-8">{bgBoxOpacity}%</span>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
