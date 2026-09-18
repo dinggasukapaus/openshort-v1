@@ -4048,7 +4048,7 @@ class EffectItem(BaseModel):
     start: float
     end: float
     strength: Optional[float] = 0.10
-    sfx: Optional[str] = "none"  # "whoosh", "boom", "camera", "pop", "chime", "none"
+    sfx: Optional[str] = "none"  # "whoosh", "boom", "camera", "pop", "chime", "glitch", "riser", "kaching", "drum_impact", "magic_sparkle", "heartbeat", "electric_zap", "none"
     sfx_volume: Optional[float] = 0.40
     reason: Optional[str] = ""
 

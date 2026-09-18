@@ -66,6 +66,41 @@ const TEMPLATE_PRESETS = [
     badge: 'Komparasi',
     desc: 'Dua warna kontras terpisah dengan emblem lingkaran "VS" di tengah' 
   },
+  { 
+    id: 'mrbeast-hype', 
+    name: 'MrBeast Hype', 
+    icon: '⚡', 
+    badge: 'High CTR',
+    desc: 'Teks raksasa 3D miring bergradasi emas + stroke hitam tebal + spotlight komik viral' 
+  },
+  { 
+    id: 'cyber-tech', 
+    name: 'Cyber Keynote', 
+    icon: '💻', 
+    badge: 'Tech & Gadget',
+    desc: 'Container frosted glass modern + border neon cyan menyala + status pill spesifikasi' 
+  },
+  { 
+    id: 'investigasi-misteri', 
+    name: 'Investigasi', 
+    icon: '🔍', 
+    badge: 'Misteri & Fakta',
+    desc: 'Pita garis polisi kuning-hitam + stempel dokumen rahasia merah + vignette tegang' 
+  },
+  { 
+    id: 'cuan-finance', 
+    name: 'Finansial Cuan', 
+    icon: '📈', 
+    badge: 'Bisnis & Saham',
+    desc: 'Grafik candlestick saham hijau naik + badge profit cuan + tipografi emas mewah' 
+  },
+  { 
+    id: 'curhat-pov', 
+    name: 'POV Curhat', 
+    icon: '💬', 
+    badge: 'POV & Drama',
+    desc: 'Balon chat pesan viral (iOS/WhatsApp) di bagian atas + kutipan narasi emosional' 
+  },
 ];
 
 // Modern Viral Color Palettes
@@ -118,6 +153,13 @@ const SFX_PRESETS = [
   { id: 'boom', name: 'Cinematic Boom', icon: '💥', desc: 'Dentuman bass elegan berkelas' },
   { id: 'camera', name: 'Camera Click', icon: '📸', desc: 'Klik jepretan kamera dua ketukan' },
   { id: 'pop', name: 'Bubble Pop', icon: '🎈', desc: 'Letupan gelembung renyah' },
+  { id: 'glitch', name: 'Cyber Glitch', icon: '⚡', desc: 'Glitch digital sci-fi futuristik' },
+  { id: 'riser', name: 'Tension Riser', icon: '🚀', desc: 'Ketegangan naik + sub-drop dramatis' },
+  { id: 'kaching', name: 'Cash Register', icon: '💰', desc: 'Kaching cuan & koin bisnis viral' },
+  { id: 'drum_impact', name: 'Taiko Impact', icon: '🥁', desc: 'Pukulan drum akustik bertenaga' },
+  { id: 'magic_sparkle', name: 'Magic Sparkle', icon: '✨', desc: 'Denting kilau kristal inspiratif' },
+  { id: 'heartbeat', name: 'Heartbeat Pulse', icon: '💓', desc: 'Detak jantung bass menegangkan' },
+  { id: 'electric_zap', name: 'Electric Zap', icon: '⚡', desc: 'Sengatan listrik kejutan fakta' },
   { id: 'none', name: 'Tanpa SFX', icon: '🔇', desc: 'Hanya audio asli klip' },
 ];
 
@@ -419,6 +461,21 @@ export default function ShortsThumbnailModal({
         break;
       case 'blueprint-podcast':
         renderTemplateBlueprintPodcast(ctx, W, H);
+        break;
+      case 'mrbeast-hype':
+        renderTemplateMrBeast(ctx, W, H);
+        break;
+      case 'cyber-tech':
+        renderTemplateCyberTech(ctx, W, H);
+        break;
+      case 'investigasi-misteri':
+        renderTemplateInvestigasi(ctx, W, H);
+        break;
+      case 'cuan-finance':
+        renderTemplateFinancial(ctx, W, H);
+        break;
+      case 'curhat-pov':
+        renderTemplateStoryPOV(ctx, W, H);
         break;
       case 'meta-card':
       default:
@@ -1307,6 +1364,664 @@ export default function ShortsThumbnailModal({
       const cLines = wrapText(ctx, cardText, bCardW - 60);
       cLines.slice(0, 2).forEach((cl, idx) => {
         ctx.fillText(cl, W / 2, bCardY + 95 + idx * 44);
+      });
+    }
+
+    ctx.restore();
+  };
+
+  // -------------------------------------------------------------
+  // TEMPLATE 9: MRBEAST HYPE / EXTREME CTR
+  // -------------------------------------------------------------
+  const renderTemplateMrBeast = (ctx, W, H) => {
+    ctx.save();
+
+    // 1. Comic Spotlight Radial Glow
+    const glow = ctx.createRadialGradient(W / 2, 420, 50, W / 2, 420, 580);
+    glow.addColorStop(0, customBgColor ? hexToRgba(customBgColor, 0.55) : 'rgba(250, 204, 21, 0.45)');
+    glow.addColorStop(0.6, 'rgba(0, 0, 0, 0.4)');
+    glow.addColorStop(1, 'rgba(0, 0, 0, 0.88)');
+    ctx.fillStyle = glow;
+    ctx.fillRect(0, 0, W, H);
+
+    // 2. High-Voltage Warning / Hype Badge at Top
+    const badgeText = (pillText || '🔥 JANGAN DI-SKIP!').toUpperCase();
+    ctx.save();
+    ctx.translate(W / 2 + headlinePosX, 140 + headlinePosY);
+    ctx.rotate((-2.5 * Math.PI) / 180);
+
+    ctx.font = `900 36px ${selectedFont.family}`;
+    const badgeMetrics = ctx.measureText(badgeText);
+    const bPadX = 36;
+    const bW = badgeMetrics.width + bPadX * 2;
+    const bH = 68;
+
+    // Drop shadow
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(-bW / 2 + 6, -bH / 2 + 6, bW, bH);
+
+    // Bright badge
+    ctx.fillStyle = customBgColor || selectedColor.color || '#E50914';
+    ctx.fillRect(-bW / 2, -bH / 2, bW, bH);
+    ctx.strokeStyle = '#FFFFFF';
+    ctx.lineWidth = 4;
+    ctx.strokeRect(-bW / 2, -bH / 2, bW, bH);
+
+    ctx.fillStyle = '#FFFFFF';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(badgeText, 0, 2);
+    ctx.restore();
+
+    // 3. Mega 3D Extruded Headline
+    const finalAlign = headlineAlign !== 'auto' ? headlineAlign : 'center';
+    ctx.textAlign = finalAlign;
+    ctx.textBaseline = 'middle';
+
+    const bigSize = Math.max(72, Math.min(125, Math.round(headlineSize * 1.45)));
+    ctx.font = `900 ${bigSize}px ${selectedFont.family}`;
+
+    const lines = wrapText(ctx, headline.toUpperCase(), W - 120);
+    const lineSpacing = bigSize * 1.16;
+    const startY = 360 + headlinePosY;
+
+    let startX = W / 2 + headlinePosX;
+    if (finalAlign === 'left') startX = 80 + headlinePosX;
+    if (finalAlign === 'right') startX = W - 80 + headlinePosX;
+
+    if (customBgBox) {
+      drawHeadlineBackgroundBox(ctx, lines, startX, startY - bigSize * 0.5, lineSpacing, finalAlign, W);
+    }
+
+    // 3D Extruded Layers (6 offset shadow strokes)
+    lines.forEach((line, idx) => {
+      const lineY = startY + idx * lineSpacing;
+
+      // 3D extrusion shadow offset
+      for (let s = 10; s >= 2; s -= 2) {
+        ctx.strokeStyle = '#000000';
+        ctx.lineWidth = 18;
+        ctx.strokeText(line, startX + s, lineY + s);
+      }
+
+      // Front thick outline
+      ctx.strokeStyle = '#000000';
+      ctx.lineWidth = 16;
+      ctx.strokeText(line, startX, lineY);
+
+      // Front text fill: gradient yellow to white or custom
+      if (customHeadlineColor) {
+        ctx.fillStyle = customHeadlineColor;
+      } else {
+        const textGrad = ctx.createLinearGradient(0, lineY - bigSize * 0.5, 0, lineY + bigSize * 0.5);
+        textGrad.addColorStop(0, '#FFFFFF');
+        textGrad.addColorStop(0.35, '#FEF08A');
+        textGrad.addColorStop(1, '#F59E0B');
+        ctx.fillStyle = textGrad;
+      }
+      ctx.fillText(line, startX, lineY);
+    });
+
+    // 4. Bottom Comic Callout Card
+    if (showBottomCard && cardText) {
+      const bH = 200;
+      const bY = H - 320;
+      const bW = W - 140;
+      const bX = 70;
+
+      ctx.save();
+      ctx.translate(bX + bW / 2, bY + bH / 2);
+      ctx.rotate((1.2 * Math.PI) / 180);
+
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.9)';
+      ctx.strokeStyle = '#FACC15';
+      ctx.lineWidth = 5;
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.7)';
+      ctx.shadowBlur = 20;
+      ctx.beginPath();
+      ctx.roundRect(-bW / 2, -bH / 2, bW, bH, 24);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.shadowColor = 'transparent';
+      ctx.fillStyle = '#FACC15';
+      ctx.font = `900 30px ${selectedFont.family}`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('⚡ ' + (cardEyebrow || 'RAHASIA TERBESAR').toUpperCase(), 0, -45);
+
+      ctx.fillStyle = '#FFFFFF';
+      ctx.font = `700 32px ${selectedFont.family}`;
+      const cLines = wrapText(ctx, cardText, bW - 60);
+      cLines.slice(0, 2).forEach((cl, i) => {
+        ctx.fillText(cl, 0, 10 + i * 42);
+      });
+      ctx.restore();
+    }
+
+    ctx.restore();
+  };
+
+  // -------------------------------------------------------------
+  // TEMPLATE 10: CYBER KEYNOTE / FROSTED TECH GLASS
+  // -------------------------------------------------------------
+  const renderTemplateCyberTech = (ctx, W, H) => {
+    ctx.save();
+
+    // 1. Futuristic Cyber Atmosphere (Dark Obsidian + Vignette)
+    const darkGrad = ctx.createLinearGradient(0, 0, 0, H);
+    darkGrad.addColorStop(0, 'rgba(3, 7, 18, 0.88)');
+    darkGrad.addColorStop(0.4, 'rgba(15, 23, 42, 0.45)');
+    darkGrad.addColorStop(1, 'rgba(3, 7, 18, 0.95)');
+    ctx.fillStyle = darkGrad;
+    ctx.fillRect(0, 0, W, H);
+
+    // Subtle HUD Crosshairs / Corner Reticles
+    ctx.strokeStyle = 'rgba(56, 189, 248, 0.45)';
+    ctx.lineWidth = 2;
+    const pad = 40;
+    const len = 30;
+    ctx.beginPath();
+    ctx.moveTo(pad, pad + len); ctx.lineTo(pad, pad); ctx.lineTo(pad + len, pad);
+    ctx.moveTo(W - pad - len, pad); ctx.lineTo(W - pad, pad); ctx.lineTo(W - pad, pad + len);
+    ctx.moveTo(pad, H - pad - len); ctx.lineTo(pad, H - pad); ctx.lineTo(pad + len, H - pad);
+    ctx.moveTo(W - pad - len, H - pad); ctx.lineTo(W - pad, H - pad); ctx.lineTo(W - pad, H - pad - len);
+    ctx.stroke();
+
+    // 2. Tech Status Glowing Pill
+    const pill = (pillText || '⚡ SPEC LEAK // 2026').toUpperCase();
+    ctx.font = `800 28px ${selectedFont.family}`;
+    const pMetrics = ctx.measureText(pill);
+    const pW = pMetrics.width + 60;
+    const pH = 54;
+    const pY = 120 + headlinePosY;
+
+    ctx.fillStyle = 'rgba(8, 51, 68, 0.85)';
+    ctx.strokeStyle = customBgColor || '#38BDF8';
+    ctx.lineWidth = 2;
+    ctx.shadowColor = customBgColor || '#0284C7';
+    ctx.shadowBlur = 16;
+    ctx.beginPath();
+    ctx.roundRect((W - pW) / 2 + headlinePosX, pY, pW, pH, 27);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.shadowColor = 'transparent';
+    ctx.fillStyle = customBgColor || '#38BDF8';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(pill, W / 2 + headlinePosX, pY + pH / 2);
+
+    // 3. Frosted Glass Container for Headline
+    const finalAlign = headlineAlign !== 'auto' ? headlineAlign : 'left';
+    ctx.textAlign = finalAlign;
+    ctx.textBaseline = 'top';
+
+    const techSize = Math.max(52, Math.min(84, headlineSize));
+    ctx.font = `800 ${techSize}px ${selectedFont.family}`;
+
+    const lines = wrapText(ctx, headline, W - 160);
+    const lineSpacing = techSize * 1.25;
+    const boxPad = 40;
+    const boxW = W - 120;
+    const boxH = lines.length * lineSpacing + boxPad * 2;
+    const boxX = 60 + headlinePosX;
+    const boxY = 220 + headlinePosY;
+
+    // Frosted Glass Box
+    ctx.fillStyle = customBgColor ? hexToRgba(customBgColor, (bgBoxOpacity / 100) * 0.85) : 'rgba(15, 23, 42, 0.82)';
+    ctx.strokeStyle = customBgColor || 'rgba(56, 189, 248, 0.6)';
+    ctx.lineWidth = 2.5;
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.7)';
+    ctx.shadowBlur = 24;
+    ctx.beginPath();
+    ctx.roundRect(boxX, boxY, boxW, boxH, 20);
+    ctx.fill();
+    ctx.stroke();
+
+    // Headline inside Glass Container
+    let textX = boxX + boxPad;
+    if (finalAlign === 'center') textX = boxX + boxW / 2;
+    if (finalAlign === 'right') textX = boxX + boxW - boxPad;
+
+    lines.forEach((line, idx) => {
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
+      ctx.shadowBlur = 12;
+      ctx.fillStyle = customHeadlineColor || '#FFFFFF';
+      ctx.fillText(line, textX, boxY + boxPad + idx * lineSpacing);
+    });
+
+    // 4. Bottom Specs / Benchmark Verdict Card
+    if (showBottomCard && cardText) {
+      const bH = 190;
+      const bY = H - 310;
+      const bW = W - 120;
+      const bX = 60;
+
+      ctx.fillStyle = 'rgba(3, 7, 18, 0.92)';
+      ctx.strokeStyle = customBgColor || '#38BDF8';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.roundRect(bX, bY, bW, bH, 18);
+      ctx.fill();
+      ctx.stroke();
+
+      // Mini status tags
+      ctx.font = `700 24px ${selectedFont.family}`;
+      ctx.textAlign = 'left';
+      ctx.fillStyle = '#22C55E';
+      ctx.fillText('● OFFICIAL', bX + 36, bY + 45);
+      ctx.fillStyle = '#38BDF8';
+      ctx.fillText('● 4K ULTRA', bX + 220, bY + 45);
+      ctx.fillStyle = '#F59E0B';
+      ctx.fillText('● BENCHMARK', bX + 410, bY + 45);
+
+      ctx.fillStyle = '#E2E8F0';
+      ctx.font = `600 32px ${selectedFont.family}`;
+      const cLines = wrapText(ctx, cardText, bW - 72);
+      cLines.slice(0, 2).forEach((cl, i) => {
+        ctx.fillText(cl, bX + 36, bY + 95 + i * 42);
+      });
+    }
+
+    ctx.restore();
+  };
+
+  // -------------------------------------------------------------
+  // TEMPLATE 11: INVESTIGASI / CRIME & MYSTERY
+  // -------------------------------------------------------------
+  const renderTemplateInvestigasi = (ctx, W, H) => {
+    ctx.save();
+
+    // 1. Dark Gritty Red/Black Vignette
+    const vig = ctx.createRadialGradient(W / 2, H / 2, W * 0.3, W / 2, H / 2, W * 0.9);
+    vig.addColorStop(0, 'rgba(0, 0, 0, 0.25)');
+    vig.addColorStop(0.65, 'rgba(69, 10, 10, 0.6)');
+    vig.addColorStop(1, 'rgba(0, 0, 0, 0.95)');
+    ctx.fillStyle = vig;
+    ctx.fillRect(0, 0, W, H);
+
+    // 2. Yellow Hazard Police Caution Tape Across Top
+    const tapeY = 120 + headlinePosY * 0.3;
+    ctx.save();
+    ctx.translate(W / 2, tapeY);
+    ctx.rotate((-3 * Math.PI) / 180);
+
+    const tapeH = 64;
+    const tapeW = W + 200;
+
+    // Yellow base
+    ctx.fillStyle = '#FACC15';
+    ctx.fillRect(-tapeW / 2, -tapeH / 2, tapeW, tapeH);
+
+    // Black diagonal hazard stripes
+    ctx.fillStyle = '#000000';
+    for (let sx = -tapeW / 2 - 100; sx < tapeW / 2 + 100; sx += 70) {
+      ctx.beginPath();
+      ctx.moveTo(sx, -tapeH / 2);
+      ctx.lineTo(sx + 35, -tapeH / 2);
+      ctx.lineTo(sx - 10, tapeH / 2);
+      ctx.lineTo(sx - 45, tapeH / 2);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    // Centered black pill banner on caution tape
+    const cautionText = (pillText || '⚠️ DOKUMEN RAHASIA // TERBONGKAR ⚠️').toUpperCase();
+    ctx.font = `900 28px ${selectedFont.family}`;
+    const cWidth = ctx.measureText(cautionText).width + 50;
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(-cWidth / 2, -22, cWidth, 44);
+
+    ctx.fillStyle = '#FACC15';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(cautionText, 0, 1);
+    ctx.restore();
+
+    // 3. Red Rubber Stamp (TOP SECRET)
+    ctx.save();
+    ctx.translate(W - 190, 240 + headlinePosY);
+    ctx.rotate((14 * Math.PI) / 180);
+
+    ctx.strokeStyle = '#DC2626';
+    ctx.lineWidth = 5;
+    ctx.strokeRect(-120, -40, 240, 80);
+    ctx.strokeRect(-114, -34, 228, 68);
+
+    ctx.fillStyle = '#DC2626';
+    ctx.font = `900 36px ${selectedFont.family}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('TOP SECRET', 0, 2);
+    ctx.restore();
+
+    // 4. Headline (Urgent White/Red with Heavy Shadow)
+    const finalAlign = headlineAlign !== 'auto' ? headlineAlign : 'left';
+    ctx.textAlign = finalAlign;
+    ctx.textBaseline = 'top';
+
+    const invSize = Math.max(56, Math.min(92, headlineSize));
+    ctx.font = `900 ${invSize}px ${selectedFont.family}`;
+
+    const lines = wrapText(ctx, headline, W - 140);
+    const lineSpacing = invSize * 1.22;
+    const startY = 320 + headlinePosY;
+
+    let startX = 70 + headlinePosX;
+    if (finalAlign === 'center') startX = W / 2 + headlinePosX;
+    if (finalAlign === 'right') startX = W - 70 + headlinePosX;
+
+    if (customBgBox) {
+      drawHeadlineBackgroundBox(ctx, lines, startX, startY, lineSpacing, finalAlign, W);
+    }
+
+    lines.forEach((line, idx) => {
+      const y = startY + idx * lineSpacing;
+      ctx.strokeStyle = '#000000';
+      ctx.lineWidth = 12;
+      ctx.strokeText(line, startX, y);
+
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.95)';
+      ctx.shadowBlur = 24;
+      ctx.shadowOffsetY = 6;
+      ctx.fillStyle = customHeadlineColor || (idx === 0 ? '#FFFFFF' : '#EF4444');
+      ctx.fillText(line, startX, y);
+    });
+
+    // 5. Evidence Dossier Card at Bottom
+    if (showBottomCard && cardText) {
+      const bH = 220;
+      const bY = H - 340;
+      const bW = W - 140;
+      const bX = 70;
+
+      ctx.fillStyle = 'rgba(24, 24, 27, 0.95)';
+      ctx.strokeStyle = '#DC2626';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.roundRect(bX, bY, bW, bH, 16);
+      ctx.fill();
+      ctx.stroke();
+
+      // Top Tab
+      ctx.fillStyle = '#DC2626';
+      ctx.beginPath();
+      ctx.roundRect(bX + 30, bY - 24, 260, 36, [10, 10, 0, 0]);
+      ctx.fill();
+
+      ctx.fillStyle = '#FFFFFF';
+      ctx.font = `900 20px ${selectedFont.family}`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('📁 BUKTI INVESTIGASI', bX + 160, bY - 6);
+
+      // Card Content
+      ctx.fillStyle = '#E5E7EB';
+      ctx.font = `600 32px ${selectedFont.family}`;
+      ctx.textAlign = 'left';
+      const cLines = wrapText(ctx, cardText, bW - 60);
+      cLines.slice(0, 3).forEach((cl, i) => {
+        ctx.fillText(cl, bX + 30, bY + 50 + i * 44);
+      });
+    }
+
+    ctx.restore();
+  };
+
+  // -------------------------------------------------------------
+  // TEMPLATE 12: FINANCIAL / CUAN & SAHAM
+  // -------------------------------------------------------------
+  const renderTemplateFinancial = (ctx, W, H) => {
+    ctx.save();
+
+    // 1. Luxury Dark Emerald Gradient
+    const fGrad = ctx.createLinearGradient(0, 0, 0, H);
+    fGrad.addColorStop(0, 'rgba(4, 47, 46, 0.9)');
+    fGrad.addColorStop(0.45, 'rgba(6, 78, 59, 0.45)');
+    fGrad.addColorStop(1, 'rgba(2, 6, 23, 0.96)');
+    ctx.fillStyle = fGrad;
+    ctx.fillRect(0, 0, W, H);
+
+    // 2. Stylized Candlestick Chart Graphic in Background
+    ctx.save();
+    ctx.strokeStyle = 'rgba(52, 211, 153, 0.35)';
+    ctx.lineWidth = 3;
+    const chartY = 380;
+    const candles = [
+      { x: 120, h: 40, up: true },
+      { x: 220, h: 70, up: true },
+      { x: 320, h: -30, up: false },
+      { x: 420, h: 90, up: true },
+      { x: 520, h: 60, up: true },
+      { x: 620, h: -20, up: false },
+      { x: 720, h: 120, up: true },
+      { x: 820, h: 140, up: true },
+      { x: 920, h: 180, up: true },
+    ];
+    candles.forEach((c) => {
+      ctx.fillStyle = c.up ? 'rgba(34, 197, 94, 0.45)' : 'rgba(239, 68, 68, 0.35)';
+      ctx.fillRect(c.x - 16, chartY - c.h, 32, Math.abs(c.h) || 20);
+      ctx.beginPath();
+      ctx.moveTo(c.x, chartY - c.h - 25);
+      ctx.lineTo(c.x, chartY + 25);
+      ctx.stroke();
+    });
+
+    // Upward trendline
+    ctx.strokeStyle = '#22C55E';
+    ctx.lineWidth = 6;
+    ctx.shadowColor = '#22C55E';
+    ctx.shadowBlur = 18;
+    ctx.beginPath();
+    ctx.moveTo(80, chartY + 30);
+    ctx.lineTo(320, chartY - 20);
+    ctx.lineTo(550, chartY - 70);
+    ctx.lineTo(940, chartY - 220);
+    ctx.stroke();
+    ctx.restore();
+
+    // 3. Top Profit Pill
+    const pill = (pillText || '▲ +340% PROFIT STRATEGY').toUpperCase();
+    ctx.font = `900 30px ${selectedFont.family}`;
+    const pW = ctx.measureText(pill).width + 64;
+    const pH = 56;
+    const pY = 130 + headlinePosY;
+
+    ctx.fillStyle = '#064E3B';
+    ctx.strokeStyle = '#10B981';
+    ctx.lineWidth = 3;
+    ctx.shadowColor = '#10B981';
+    ctx.shadowBlur = 20;
+    ctx.beginPath();
+    ctx.roundRect((W - pW) / 2 + headlinePosX, pY, pW, pH, 28);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.shadowColor = 'transparent';
+    ctx.fillStyle = '#34D399';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(pill, W / 2 + headlinePosX, pY + pH / 2);
+
+    // 4. Luxury Financial Headline
+    const finalAlign = headlineAlign !== 'auto' ? headlineAlign : 'center';
+    ctx.textAlign = finalAlign;
+    ctx.textBaseline = 'middle';
+
+    const finSize = Math.max(56, Math.min(94, headlineSize));
+    ctx.font = `900 ${finSize}px ${selectedFont.family}`;
+
+    const lines = wrapText(ctx, headline, W - 140);
+    const lineSpacing = finSize * 1.2;
+    const startY = 320 + headlinePosY;
+
+    let startX = W / 2 + headlinePosX;
+    if (finalAlign === 'left') startX = 80 + headlinePosX;
+    if (finalAlign === 'right') startX = W - 80 + headlinePosX;
+
+    if (customBgBox) {
+      drawHeadlineBackgroundBox(ctx, lines, startX, startY - finSize * 0.5, lineSpacing, finalAlign, W);
+    }
+
+    lines.forEach((line, idx) => {
+      const y = startY + idx * lineSpacing;
+      ctx.strokeStyle = '#000000';
+      ctx.lineWidth = 14;
+      ctx.strokeText(line, startX, y);
+
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
+      ctx.shadowBlur = 20;
+      ctx.shadowOffsetY = 6;
+      ctx.fillStyle = customHeadlineColor || (idx % 2 === 0 ? '#FBBF24' : '#FFFFFF');
+      ctx.fillText(line, startX, y);
+    });
+
+    // 5. Bloomberg-Style Ticker Card at Bottom
+    if (showBottomCard && cardText) {
+      const bH = 200;
+      const bY = H - 320;
+      const bW = W - 120;
+      const bX = 60;
+
+      ctx.fillStyle = 'rgba(2, 6, 23, 0.95)';
+      ctx.strokeStyle = '#F59E0B';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.roundRect(bX, bY, bW, bH, 18);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = '#F59E0B';
+      ctx.font = `900 24px ${selectedFont.family}`;
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'top';
+      ctx.fillText('📈 ' + (cardEyebrow || 'REKOMENDASI EKSEKUSI').toUpperCase(), bX + 36, bY + 32);
+
+      ctx.fillStyle = '#FFFFFF';
+      ctx.font = `600 32px ${selectedFont.family}`;
+      const cLines = wrapText(ctx, cardText, bW - 72);
+      cLines.slice(0, 2).forEach((cl, i) => {
+        ctx.fillText(cl, bX + 36, bY + 76 + i * 44);
+      });
+    }
+
+    ctx.restore();
+  };
+
+  // -------------------------------------------------------------
+  // TEMPLATE 13: POV CURHAT / VIRAL STORYTELLING CHAT
+  // -------------------------------------------------------------
+  const renderTemplateStoryPOV = (ctx, W, H) => {
+    ctx.save();
+
+    // 1. Smooth Dark Gradient
+    const sGrad = ctx.createLinearGradient(0, 0, 0, H);
+    sGrad.addColorStop(0, 'rgba(0, 0, 0, 0.82)');
+    sGrad.addColorStop(0.35, 'rgba(0, 0, 0, 0.35)');
+    sGrad.addColorStop(0.65, 'rgba(0, 0, 0, 0.35)');
+    sGrad.addColorStop(1, 'rgba(0, 0, 0, 0.92)');
+    ctx.fillStyle = sGrad;
+    ctx.fillRect(0, 0, W, H);
+
+    // 2. Realistic iOS / WhatsApp Floating Chat Bubble at Top
+    const bubbleW = W - 140;
+    const bubbleX = 70 + headlinePosX;
+    const bubbleY = 140 + headlinePosY;
+
+    const povHeader = (pillText || 'POV: Ketika kamu baru sadar...').toUpperCase();
+
+    const povSize = Math.max(48, Math.min(80, headlineSize));
+    ctx.font = `800 ${povSize}px ${selectedFont.family}`;
+    const lines = wrapText(ctx, headline, bubbleW - 72);
+    const lineSpacing = povSize * 1.2;
+    const bubbleH = 80 + lines.length * lineSpacing + 40;
+
+    // Shadow
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.6)';
+    ctx.shadowBlur = 24;
+    ctx.shadowOffsetY = 8;
+
+    // Chat Bubble Body
+    ctx.fillStyle = customBgColor ? hexToRgba(customBgColor, bgBoxOpacity / 100) : 'rgba(255, 255, 255, 0.96)';
+    ctx.beginPath();
+    ctx.roundRect(bubbleX, bubbleY, bubbleW, bubbleH, 28);
+    ctx.fill();
+
+    // Speech bubble triangle notch at top-left
+    ctx.beginPath();
+    ctx.moveTo(bubbleX + 44, bubbleY);
+    ctx.lineTo(bubbleX + 32, bubbleY - 20);
+    ctx.lineTo(bubbleX + 64, bubbleY);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.shadowColor = 'transparent';
+
+    // Avatar Circle inside Bubble Header
+    ctx.fillStyle = selectedColor.color || '#3B82F6';
+    ctx.beginPath();
+    ctx.arc(bubbleX + 50, bubbleY + 45, 22, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = 'bold 22px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('💬', bubbleX + 50, bubbleY + 45);
+
+    // Header username / prompt text
+    ctx.fillStyle = customBgColor ? '#FFFFFF' : '#64748B';
+    ctx.font = `700 24px ${selectedFont.family}`;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(povHeader, bubbleX + 86, bubbleY + 46);
+
+    // Headline inside Chat Bubble
+    const finalAlign = headlineAlign !== 'auto' ? headlineAlign : 'left';
+    ctx.textAlign = finalAlign;
+    ctx.textBaseline = 'top';
+    ctx.font = `900 ${povSize}px ${selectedFont.family}`;
+    ctx.fillStyle = customHeadlineColor || (customBgColor ? '#FFFFFF' : '#0F172A');
+
+    let textX = bubbleX + 36;
+    if (finalAlign === 'center') textX = bubbleX + bubbleW / 2;
+    if (finalAlign === 'right') textX = bubbleX + bubbleW - 36;
+
+    lines.forEach((line, idx) => {
+      ctx.fillText(line, textX, bubbleY + 95 + idx * lineSpacing);
+    });
+
+    // 3. Social Interaction Floating Bar at Bottom
+    if (showBottomCard && cardText) {
+      const bH = 180;
+      const bY = H - 300;
+      const bW = W - 140;
+      const bX = 70;
+
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.92)';
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.roundRect(bX, bY, bW, bH, 22);
+      ctx.fill();
+      ctx.stroke();
+
+      // Social counters
+      ctx.font = `700 26px ${selectedFont.family}`;
+      ctx.textAlign = 'left';
+      ctx.fillStyle = '#F43F5E';
+      ctx.fillText('❤️ 184K', bX + 36, bY + 45);
+      ctx.fillStyle = '#38BDF8';
+      ctx.fillText('💬 4.2K', bX + 220, bY + 45);
+      ctx.fillStyle = '#E2E8F0';
+      ctx.fillText('🔗 Share', bX + 390, bY + 45);
+
+      ctx.fillStyle = '#FFFFFF';
+      ctx.font = `600 32px ${selectedFont.family}`;
+      const cLines = wrapText(ctx, cardText, bW - 72);
+      cLines.slice(0, 2).forEach((cl, i) => {
+        ctx.fillText(cl, bX + 36, bY + 90 + i * 40);
       });
     }
 

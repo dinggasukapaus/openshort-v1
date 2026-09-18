@@ -16,11 +16,18 @@ const EFFECT_TYPES = [
 ];
 
 const SFX_OPTIONS = [
+  { id: 'chime', name: 'Notification Bell', icon: '🔔', desc: 'Denting notifikasi viral smartphone' },
   { id: 'whoosh', name: 'Fast Whoosh', icon: '💨', desc: 'Hembusan angin modern TikTok/Reels' },
   { id: 'boom', name: 'Cinematic Boom', icon: '💥', desc: 'Dentuman sub-bass dramatis' },
   { id: 'camera', name: 'Camera Click', icon: '📸', desc: 'Klik jepretan kamera dua ketukan' },
   { id: 'pop', name: 'Bubble Pop', icon: '🎈', desc: 'Letupan gelembung renyah' },
-  { id: 'chime', name: 'Notification Bell', icon: '🔔', desc: 'Denting notifikasi viral smartphone' },
+  { id: 'glitch', name: 'Cyber Glitch', icon: '⚡', desc: 'Glitch digital sci-fi futuristik' },
+  { id: 'riser', name: 'Tension Riser', icon: '🚀', desc: 'Ketegangan naik + sub-drop dramatis' },
+  { id: 'kaching', name: 'Cash Register', icon: '💰', desc: 'Kaching cuan & koin bisnis viral' },
+  { id: 'drum_impact', name: 'Taiko Impact', icon: '🥁', desc: 'Pukulan drum akustik bertenaga' },
+  { id: 'magic_sparkle', name: 'Magic Sparkle', icon: '✨', desc: 'Denting kilau kristal inspiratif' },
+  { id: 'heartbeat', name: 'Heartbeat Pulse', icon: '💓', desc: 'Detak jantung bass menegangkan' },
+  { id: 'electric_zap', name: 'Electric Zap', icon: '⚡', desc: 'Sengatan listrik kejutan fakta' },
   { id: 'none', name: 'Tanpa SFX', icon: '🔇', desc: 'Hanya audio asli klip' },
 ];
 
