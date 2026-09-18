@@ -26,8 +26,8 @@ import hook_grounding
 import layout_picker
 import llm_backend
 from clip_selection import (build_transcript_windows, clip_count_targets,
-                            clip_duration_bounds, snap_clip_to_words,
-                            trim_to_best)
+                            clip_duration_bounds, compute_viral_score_v2,
+                            snap_clip_to_words, trim_to_best)
 from ffmpeg_utils import (video_encode_args, audio_encode_args, QUALITY,
                           QUALITY_FAST, METADATA_SCRUB)
 from dotenv import load_dotenv
@@ -1648,16 +1648,40 @@ def get_viral_clips(transcript_result, video_duration):
 
         # Shortlist the top windows; scale with duration so long videos surface
         # more candidates without exploding the detail call.
-        scored.sort(key=lambda w: w.get("score", 0), reverse=True)
+        scored.sort(key=lambda w: w.get("window_score", w.get("score", 0)), reverse=True)
         target = max(3, min(10, int(video_duration // 90) + 2))
         by_id = {w["id"]: w for w in windows}
-        shortlist = [by_id[w["id"]] for w in scored[:target] if w.get("id") in by_id]
+        shortlist = []
+        for w in scored[:target]:
+            wid = w.get("id")
+            if wid in by_id:
+                win_copy = dict(by_id[wid])
+                win_copy["scouted_events"] = w.get("events", [])
+                win_copy["hook_promise"] = w.get("hook_promise", "")
+                win_copy["window_score"] = w.get("window_score", w.get("score", 0))
+                shortlist.append(win_copy)
         if not shortlist:
             shortlist = windows[:target]  # scoring returned nothing usable
         print(f"   Shortlisted {len(shortlist)} window(s) for detail.")
 
         # --- Pass 2: detailed clip extraction on the shortlist ---
         min_clips, max_clips = clip_count_targets(len(shortlist))
+
+        def _detail_payload(ws):
+            items = []
+            for w in ws:
+                item = {
+                    "id": w["id"],
+                    "start": w["start"],
+                    "end": w["end"],
+                    "text": w["text"]
+                }
+                if w.get("hook_promise"):
+                    item["hook_promise"] = w["hook_promise"]
+                if w.get("scouted_events"):
+                    item["scouted_events"] = w["scouted_events"]
+                items.append(item)
+            return items
 
         def _detail_prompt(ws):
             # A split batch keeps the full clip-count band: a short list can
@@ -1666,23 +1690,29 @@ def get_viral_clips(transcript_result, video_duration):
                 video_duration=video_duration, language=language,
                 min_clips=min_clips, max_clips=max_clips,
                 min_secs=min_secs, max_secs=max_secs,
-                windows_json=json.dumps(_payload(ws), ensure_ascii=False))
+                windows_json=json.dumps(_detail_payload(ws), ensure_ascii=False))
 
         shorts = _run_stage_split(client, model_name, shortlist, _detail_prompt,
                                   gemini_worker.DetailResponse, "shorts", costs, "detail")
-        if len(shorts) > max_clips:
-            # By score, never by position: the results arrive in transcript
-            # order, so slicing kept the earliest clips and silently dropped
-            # the back half of the video. See trim_to_best.
-            dropped = len(shorts) - max_clips
-            shorts = trim_to_best(shorts, max_clips)
-            print(f"   Kept the {max_clips} best-scoring clip(s) of "
-                  f"{max_clips + dropped}.")
+
+        # Compute Viral Potential Ranking Score v2 and normalize predicted_score
+        for s in shorts:
+            s["predicted_score"] = compute_viral_score_v2(s)
+
+        orig_count = len(shorts)
+        shorts = trim_to_best(shorts, max_clips)
+        if len(shorts) < orig_count:
+            print(f"   Kept {len(shorts)} best-scoring clip(s) of {orig_count} after suppression & diversity filtering.")
+
         # Snap each proposed clip onto real word boundaries (+ a bit of silence).
         for s in shorts:
             ns, ne = snap_clip_to_words(s.get("start", 0), s.get("end", 0), words, video_duration,
                                         min_duration=min_secs, max_duration=max_secs)
             s["start"], s["end"] = ns, ne
+            if "start_time" in s:
+                s["start_time"] = ns
+            if "end_time" in s:
+                s["end_time"] = ne
 
         # Aggregate cost across both passes.
         cost_analysis = None

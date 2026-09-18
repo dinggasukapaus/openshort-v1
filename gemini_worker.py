@@ -2,12 +2,12 @@ import argparse
 import json
 import os
 import sys
-from typing import List, Optional
+from typing import Any, List, Optional, Union
 
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types as genai_types
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, model_validator
 
 from clip_selection import (clip_count_targets, clip_duration_bounds,
                             lookup_model_prices)
@@ -18,31 +18,140 @@ load_dotenv()
 # --- Structured output schemas (passed as response_schema so the API
 # --- guarantees the format instead of us repairing free-form JSON). ---
 
-class ScoredWindowModel(BaseModel):
-    id: str
-    start: float
-    end: float
-    score: int
-    reason: str
+class ScoutEventModel(BaseModel):
+    event_id: Optional[str] = ""
+    start_time: Optional[float] = 0.0
+    end_time: Optional[float] = 0.0
+    type: Optional[str] = ""
+    hook_strength: Optional[int] = 0
+    curiosity: Optional[int] = 0
+    emotion: Optional[int] = 0
+    surprise: Optional[int] = 0
+    payoff_potential: Optional[int] = 0
+    reason: Optional[str] = ""
+
+    # Aliases
+    event_summary: Optional[str] = None
+    event_start: Optional[float] = None
+    event_end: Optional[float] = None
+    signal_type: Optional[str] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def handle_event_aliases(cls, values):
+        if isinstance(values, dict):
+            if "start_time" not in values and "event_start" in values:
+                values["start_time"] = values["event_start"]
+            if "end_time" not in values and "event_end" in values:
+                values["end_time"] = values["event_end"]
+            if "reason" not in values and "event_summary" in values:
+                values["reason"] = values["event_summary"]
+            if "type" not in values and "signal_type" in values:
+                values["type"] = values["signal_type"]
+        return values
+
+
+class ScoutWindowModel(BaseModel):
+    id: Union[str, int]
+    start: Optional[float] = None
+    end: Optional[float] = None
+    window_score: int = Field(default=0)
+    score: Optional[int] = None
+    hook_promise: Optional[str] = ""
+    events: Optional[List[ScoutEventModel]] = Field(default_factory=list)
+    reason: Optional[str] = ""
+    has_editorial_substance: Optional[bool] = True
+
+    @model_validator(mode="before")
+    @classmethod
+    def handle_score_alias(cls, values):
+        if isinstance(values, dict):
+            if "window_score" not in values and "score" in values:
+                values["window_score"] = values["score"]
+            elif "score" not in values and "window_score" in values:
+                values["score"] = values["window_score"]
+        return values
+
+
+# Backward-compatible alias
+ScoredWindowModel = ScoutWindowModel
 
 
 class ScoreResponse(BaseModel):
-    windows: List[ScoredWindowModel]
+    windows: List[ScoutWindowModel] = Field(default_factory=list)
 
 
 class DetailClipModel(BaseModel):
-    start: float
-    end: float
-    source_window_id: str
+    start: Optional[float] = None
+    end: Optional[float] = None
+    start_time: Optional[float] = None
+    end_time: Optional[float] = None
+    source_window_id: Optional[str] = None
     predicted_score: int
-    video_description_for_tiktok: str
-    video_description_for_instagram: str
-    video_title_for_youtube_short: str
-    viral_hook_text: str
+
+    # V2 Multi-dimensional component scores
+    hook_type: Optional[str] = None
+    hook_score: Optional[int] = None
+
+    retention_score: Optional[int] = None
+    retention_risk: Optional[str] = "low"
+    retention_drop_reason: Optional[str] = ""
+
+    payoff_score: Optional[int] = None
+    payoff_type: Optional[str] = None
+
+    curiosity_score: Optional[int] = None
+    emotion_score: Optional[int] = None
+    dominant_emotion: Optional[str] = None
+
+    surprise_score: Optional[int] = None
+    relatability_score: Optional[int] = None
+    conflict_score: Optional[int] = None
+    shareability_score: Optional[int] = None
+    share_reason: Optional[str] = ""
+
+    standalone_score: Optional[int] = None
+    clipability_score: Optional[int] = None
+    context_dependency: Optional[int] = None
+
+    hook_rewrite_potential: Optional[bool] = False
+    editorial_hook_suggestion: Optional[str] = None
+
+    content_type: Optional[str] = None
+    reason: Optional[str] = None
+
+    video_description_for_tiktok: Optional[str] = ""
+    video_description_for_instagram: Optional[str] = ""
+    video_title_for_youtube_short: Optional[str] = ""
+    viral_hook_text: Optional[str] = ""
+
+    @model_validator(mode="before")
+    @classmethod
+    def handle_time_aliases(cls, values):
+        if isinstance(values, dict):
+            if "start" not in values and "start_time" in values:
+                values["start"] = values["start_time"]
+            elif "start_time" not in values and "start" in values:
+                values["start_time"] = values["start"]
+
+            if "end" not in values and "end_time" in values:
+                values["end"] = values["end_time"]
+            elif "end_time" not in values and "end" in values:
+                values["end_time"] = values["end"]
+        return values
 
 
 class DetailResponse(BaseModel):
-    shorts: List[DetailClipModel]
+    shorts: List[DetailClipModel] = Field(default_factory=list)
+    candidates: Optional[List[DetailClipModel]] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def handle_candidates_alias(cls, values):
+        if isinstance(values, dict):
+            if ("shorts" not in values or not values["shorts"]) and "candidates" in values:
+                values["shorts"] = values["candidates"]
+        return values
 
 
 # Visual (no-transcript) clip selection: Gemini watches a silent video and
@@ -243,107 +352,175 @@ def _log(message: str) -> None:
     stream.flush()
 
 SCORE_PROMPT_TEMPLATE = """
-You are a senior short-form video strategist.
-Select the MOST viral candidate windows from this batch.
+You are a senior short-form video content scout and viral strategist.
+Scan the transcript windows below and identify high-potential EVENT regions inside each window.
 
-Rules:
-- Return only valid JSON.
-- Choose up to 3 windows from this batch.
-- `score` must be an integer from 0 to 100.
-- THE 2-SECOND TEST is the main criterion: would the first 2 seconds of this
-  moment force a cold viewer (no context) to keep watching? Windows that only
-  work with prior context score low.
-- Prefer windows with strong hooks, conflict, surprise, outrage, emotion,
-  novelty, big numbers, or a clear payoff.
-- Ignore weak filler, housekeeping, outros, rambling transitions, and
-  low-signal padding unless there is an obvious hook or payoff.
+EVENT DISCOVERY:
+For each window, identify up to 5 candidate events. An event can be:
+- personal story / confession / failure
+- surprising statement / unusual fact / counterintuitive insight
+- strong opinion / contrarian take / controversy
+- funny moment / humor setup
+- emotional moment / vulnerable reaction
+- clear problem + solution (question + answer, setup + payoff)
+
+For each event:
+- Identify approximate `start_time` and `end_time` using actual timestamps from the transcript (NEVER invent timestamps).
+- Rate `hook_strength`, `curiosity`, `emotion`, `surprise`, `payoff_potential` on a 0-100 scale.
+- Provide a concise `reason`.
+
+LOW-SIGNAL FILTER (STRICT DOWNGRADE):
+Heavily penalize or reject windows containing:
+- Greetings and housekeeping: "halo teman-teman", "selamat datang kembali", "welcome back"
+- Podcast host pleasantries and guest introductions
+- Sponsor messages and commercial advertisements
+- Outros, subscription requests, "like, comment, and subscribe"
+- Repetitive rambling, filler, and long pauses
+- Unrecoverable context fragments: "seperti yang tadi saya bilang", "nah itu tadi", "seperti yang kita bahas sebelumnya"
+
+Calculate `window_score` (0-100 integer) based on the overall viral potential of the events discovered.
 
 TRANSCRIPT_LANGUAGE: {language}
 VIDEO_DURATION_SECONDS: {video_duration}
 WINDOWS_JSON:
 {windows_json}
 
-Return only:
+Return ONLY valid JSON matching this exact structure:
 {{
   "windows": [
     {{
       "id": "<window id>",
       "start": <number>,
       "end": <number>,
-      "score": <integer 0-100>,
-      "reason": "<very short reason>"
+      "window_score": <integer 0-100>,
+      "events": [
+        {{
+          "event_id": "event_1",
+          "start_time": <number>,
+          "end_time": <number>,
+          "type": "<story|opinion|insight|surprise|humor|emotion>",
+          "hook_strength": <integer 0-100>,
+          "curiosity": <integer 0-100>,
+          "emotion": <integer 0-100>,
+          "surprise": <integer 0-100>,
+          "payoff_potential": <integer 0-100>,
+          "reason": "<concise reason>"
+        }}
+      ]
     }}
   ]
 }}
 """
 
 DETAIL_PROMPT_TEMPLATE = """
-You are a senior short-form video editor and viral copywriter.
-Choose the BEST short clips from these shortlisted candidate windows.
+You are a senior short-form video editor, narrative architect, and viral copywriter.
+Extract the BEST short clips from these candidate windows and evaluate them using multi-dimensional viral potential signals.
 
-CLIP RULES:
-- Return only valid JSON.
-- Each clip must be {min_secs:g} to {max_secs:g} seconds long, in absolute seconds from the start of the source video.
-- Stay within the candidate window boundaries.
-- THE 2-SECOND RULE: the clip MUST open on its strongest moment. If the first
-  2 seconds would not stop a cold viewer from scrolling, move the start or skip the clip.
-- Start slightly before the hook and end slightly after the payoff when possible.
-- Do not cut in the middle of a word or phrase.
-- No generic intros/outros unless they are the hook.
-- STANDS ALONE: the clip must make sense to someone who has seen nothing else.
-  If it opens on a pronoun, a "that", a "so anyway", or an answer whose question
-  was asked earlier, move the start back to where the idea begins or skip it.
-  A brilliant moment that needs the previous five minutes is not a clip.
-  Fix this by moving the START earlier, never by cutting the ending short: a
-  clip that loses its payoff to gain context has traded down.
-- HOW MANY: return {min_clips} to {max_clips} clips. Work through EVERY candidate
-  window — they were already scored as the best moments in the video, so a window
-  that yields nothing should be the exception, not the norm. Two or three clips
-  from one window are fine when they are genuinely different moments. The rules
-  above let you skip a weak clip; they are not a licence to return one clip and
-  stop. Only fall short of {min_clips} when the material truly does not hold
-  them, and never pad with a clip you would not publish yourself.
-- DIVERSITY: never return two clips that make the same point, tell the same
-  story, or land the same joke — even across different windows. Pick the
-  stronger one and drop the other. Two clips on the same broad topic are fine
-  as long as each lands its own moment.
+CRITICAL PRINCIPLE:
+Do NOT assume "stronger hook = automatically better clip".
+A clip with Hook=90, Retention=45, Payoff=30 is INFERIOR to a clip with Hook=82, Retention=91, Payoff=94.
+Your goal is to identify clips that succeed across the entire viewer journey:
+SCROLL STOP (Hook) -> RETENTION (Sustained Attention) -> PAYOFF (Satisfying Resolution).
+The AI does NOT guarantee virality; the scores represent estimated short-form content potential.
 
-HOOK PLAYBOOK — pick the strongest fitting pattern for `viral_hook_text` (max 10 words):
-- Open question: "Why does everyone get this wrong?"
-- Hot take / controversy: "Stop doing this. Seriously."
-- Number / fact shock: "97% of people miss this."
-- Story loop: "This one email almost ruined me."
-- POV / pattern interrupt: "POV: you finally understand it."
-(These are English PATTERNS — always write the actual hook in TRANSCRIPT_LANGUAGE.)
-- ABOUT THIS MOMENT, NOT THE VIDEO: the hook and the title name the concrete
-  thing that happens inside this clip — the tool being set up, the action,
-  the number, the claim, the name. A line that could sit on any clip of this
-  video ("I automated my clips with AI") is wrong. If nothing concrete can be
-  named, quote the clip's strongest sentence instead of summarising the topic.
+TIME CONTRACT:
+- Absolute seconds from video start: 0 <= start_time < end_time <= {video_duration}.
+- Duration: {min_secs:g} to {max_secs:g} seconds (PREFER 20–45 seconds when the narrative completes naturally).
+- Never cut in the middle of a word or phrase.
 
-COPY RULES — ALL text fields (descriptions, title, hook) MUST be written in TRANSCRIPT_LANGUAGE ({language}):
-- Descriptions (TikTok + Instagram): 1-2 punchy sentences that tease the payoff
-  without spoiling it, then 3-5 topically relevant hashtags. No generic hashtag spam.
-- `video_title_for_youtube_short`: max 100 chars, curiosity-driven, no fake claims.
-- `predicted_score`: honest 0-100 estimate of viral potential.
+STANDALONE TEST:
+The clip MUST make complete sense to a cold viewer who has never seen the video or speaker before.
+Penalize unexplained pronouns, references to earlier unshown discussion ("seperti tadi saya bilang", "makanya", "dia melakukan itu"), and missing setups/answers.
+Reflect this in `standalone_score` (high=cleanly independent) and `context_dependency` (0=fully standalone, 100=unusable without prior context).
+
+MULTI-SIGNAL EVALUATION (0-100 integer for each score):
+1. `hook_type` & `hook_score`:
+   Types: open_question, strong_opinion, contrarian_opinion, fact_shock, personal_confession, unexpected_result, story_opening, emotional_statement, curiosity_gap, direct_advice, humor_setup, conflict.
+   Does the first 1-3 seconds stop scrolling without relying on full video context?
+2. `retention_score`, `retention_risk` ("low"|"medium"|"high"), `retention_drop_reason`:
+   Evaluate retention progression across 0-3s, 3-10s, 10-20s, 20s+, and ending.
+3. `payoff_score` & `payoff_type`:
+   Types: answer, revelation, twist, lesson, punchline, emotional_resolution, insight, reaction, none.
+   Does the ending resolve the opening promise and justify the viewer's time?
+4. `curiosity_score`:
+   Does the opening create an unresolved question that keeps the viewer watching for the answer?
+5. `emotion_score` & `dominant_emotion`:
+   Emotions: humor, surprise, excitement, anger, sadness, fear, inspiration, curiosity, admiration, disbelief, nostalgia, embarrassment.
+6. `surprise_score`:
+   Unusual experience, counterintuitive fact, or unexpected outcome.
+7. `relatability_score`:
+   Can viewers see themselves or their peers in the situation (family, work, money, failure, daily life)?
+8. `conflict_score`:
+   Disagreement, internal debate, risk -> consequence, or tension. (Optional: peaceful insight can still score high).
+9. `shareability_score` & `share_reason`:
+   Would someone send this to a friend? ("Ini gue banget", shocking fact, life advice, relatable laugh).
+10. `clipability_score`:
+    Clean start/end, natural flow, clear speech, tight pacing.
+11. `context_dependency` (0-100, where 0=independent, 100=depends completely on prior context).
+
+HOOK REFRAMING:
+If a clip has outstanding story/payoff but opens on a slow conversational lead-in (e.g. "Jadi waktu itu..."):
+- Set `hook_rewrite_potential: true`
+- Provide `editorial_hook_suggestion`: max 10 words editorial hook text overlay for visual text hook on screen (e.g. "Dia kehilangan Rp2 miliar karena satu keputusan.").
+
+SCORE CALCULATION GUIDANCE:
+Calculate `predicted_score` (0-100 integer):
+- Base Score = (hook * 0.20) + (retention * 0.20) + (payoff * 0.15) + (curiosity * 0.15) + (emotion * 0.10) + (surprise * 0.05) + (relatability * 0.05) + (conflict * 0.05) + (shareability * 0.05)
+- Quality Factor = 0.50 + 0.30*(standalone/100) + 0.20*(clipability/100) - 0.30*(context_dependency/100)
+- `predicted_score` = clamp(round(Base Score * Quality Factor), 0, 100)
+
+CATEGORIES:
+90-100: Exceptional short-form potential | 80-89: Very strong potential | 70-79: Strong candidate | 60-69: Moderate candidate | Below 60: Weak candidate.
+
+HOW MANY & DIVERSITY:
+return {min_clips} to {max_clips} clips.
+Never return duplicate clips that tell the same story or make the same point. Aim for variety in content types and emotions.
+
+COPY RULES — All descriptions, title, and viral_hook_text in {language}:
+- ABOUT THIS MOMENT, NOT THE VIDEO: the hook and the title name the concrete thing that happens inside this clip.
+- Descriptions (TikTok + Instagram): 1-2 punchy sentences teasing the payoff + 3-5 relevant hashtags.
+- `video_title_for_youtube_short`: max 100 chars, curiosity-driven.
+- `viral_hook_text`: max 10 words text overlay.
 
 TRANSCRIPT_LANGUAGE: {language}
 VIDEO_DURATION_SECONDS: {video_duration}
 CANDIDATE_WINDOWS_JSON:
 {windows_json}
 
-Return only:
+Return ONLY valid JSON matching this exact structure:
 {{
   "shorts": [
     {{
-      "start": <number>,
-      "end": <number>,
+      "start_time": <number>,
+      "end_time": <number>,
       "source_window_id": "<window id>",
       "predicted_score": <integer 0-100>,
+      "hook_type": "<type>",
+      "hook_score": <integer 0-100>,
+      "retention_score": <integer 0-100>,
+      "retention_risk": "<low|medium|high>",
+      "retention_drop_reason": "<reason or empty>",
+      "payoff_score": <integer 0-100>,
+      "payoff_type": "<type>",
+      "curiosity_score": <integer 0-100>,
+      "emotion_score": <integer 0-100>,
+      "dominant_emotion": "<emotion>",
+      "surprise_score": <integer 0-100>,
+      "relatability_score": <integer 0-100>,
+      "conflict_score": <integer 0-100>,
+      "shareability_score": <integer 0-100>,
+      "share_reason": "<reason>",
+      "standalone_score": <integer 0-100>,
+      "clipability_score": <integer 0-100>,
+      "context_dependency": <integer 0-100>,
+      "hook_rewrite_potential": <boolean>,
+      "editorial_hook_suggestion": "<suggestion or null>",
+      "content_type": "<personal_story|insight|controversy|fact|humor|reaction>",
+      "reason": "<concise justification>",
       "video_description_for_tiktok": "<description + hashtags>",
       "video_description_for_instagram": "<description + hashtags>",
       "video_title_for_youtube_short": "<title max 100 chars>",
-      "viral_hook_text": "<short overlay max 10 words>"
+      "viral_hook_text": "<max 10 words>"
     }}
   ]
 }}
@@ -501,7 +678,7 @@ def _thinking_config_from_env(model_name: str):
                 return genai_types.ThinkingConfig(thinking_level=raw)
             return genai_types.ThinkingConfig(thinking_budget=2048 if raw == "low" else 8192)
     except Exception as e:
-        _log(f"⚠️ Ignoring GEMINI_THINKING_SCORE={raw!r}: {e}")
+        _log(f"\u26a0\ufe0f Ignoring GEMINI_THINKING_SCORE={raw!r}: {e}")
     return None
 
 
@@ -565,7 +742,7 @@ def main() -> int:
         fmt["min_secs"], fmt["max_secs"] = clip_duration_bounds()
     prompt = template.format(**fmt)
 
-    _log(f"🤖 Gemini worker request: mode={args.mode} strategy={args.strategy} model={model_name} items={len(payload.get('windows', []))}")
+    _log(f"\U0001f916 Gemini worker request: mode={args.mode} strategy={args.strategy} model={model_name} items={len(payload.get('windows', []))}")
     response = client.models.generate_content(
         model=model_name,
         contents=prompt,
@@ -588,7 +765,7 @@ def main() -> int:
     }
     with open(args.output_path, "w", encoding="utf-8") as f:
         json.dump(result, f, indent=2, ensure_ascii=False)
-    _log(f"✅ Gemini worker success: mode={args.mode}")
+    _log(f"\u2705 Gemini worker success: mode={args.mode}")
     return 0
 
 

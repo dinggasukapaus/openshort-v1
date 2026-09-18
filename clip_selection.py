@@ -67,39 +67,198 @@ def clip_count_targets(n_windows):
     return low, max(low, high)
 
 
-def trim_to_best(shorts, max_clips):
-    """Cut an over-long detail-pass result down to ``max_clips`` BY SCORE.
+def compute_viral_score_v2(clip_dict: dict) -> int:
+    """Computes the Viral Potential Ranking Score (v2) from 12 multi-dimensional signals.
 
-    The detail pass hands its clips back in transcript order, batch after
-    batch, so slicing the list keeps the EARLIEST clips rather than the best
-    ones. On a 9-minute walkthrough that quietly threw away everything past
-    minute three: the model proposed clips across the whole video, and the
-    ones covering the demo, the MCP walkthrough and the close were the tail
-    that got dropped. Worse, the failure scales the wrong way — the more
-    generous the model is, the more of the video disappears.
+    Base Score Weights:
+      Hook Strength:        20%
+      Retention Potential:  20%
+      Payoff Quality:       15%
+      Curiosity Gap:        15%
+      Emotional Intensity:  10%
+      Surprise / Novelty:    5%
+      Relatability:          5%
+      Conflict / Tension:    5%
+      Shareability:          5%
 
-    That sabotages the windowing: get_viral_clips builds scoring windows
-    precisely because "a single call over the whole transcript clusters picks
-    near the start", and a positional slice puts the clustering right back.
+    Quality Modifiers:
+      Standalone Clarity:   positive impact
+      Clipability:          positive impact
+      Context Dependency:   negative penalty
 
-    Ranking is by ``predicted_score`` (the detail prompt already asks for it,
-    and nothing else was reading it here). Ties keep transcript order, and the
-    survivors come back in transcript order too, so clip numbering still runs
-    front to back the way every caller downstream expects.
+    Quality factor formula:
+      QF = 0.50 + 0.30 * (standalone / 100) + 0.20 * (clipability / 100) - 0.30 * (context_dep / 100)
+      bounded between [0.25, 1.05]
+
+    FINAL SCORE = clamp(round(Base Score * Quality Factor), 0, 100)
+    """
+    def _val(k, default=None):
+        v = clip_dict.get(k)
+        if v is None:
+            return default
+        try:
+            return max(0.0, min(100.0, float(v)))
+        except (TypeError, ValueError):
+            return default
+
+    hook = _val("hook_score")
+    retention = _val("retention_score")
+    payoff = _val("payoff_score")
+    curiosity = _val("curiosity_score")
+    emotion = _val("emotion_score")
+    surprise = _val("surprise_score")
+    relatability = _val("relatability_score")
+    conflict = _val("conflict_score")
+    shareability = _val("shareability_score")
+
+    # If all component scores are missing, fallback to existing predicted_score
+    components = [hook, retention, payoff, curiosity, emotion, surprise, relatability, conflict, shareability]
+    if all(c is None for c in components):
+        raw = clip_dict.get("predicted_score")
+        if raw is None:
+            return 0
+        try:
+            return int(round(max(0.0, min(100.0, float(raw)))))
+        except (TypeError, ValueError):
+            return 0
+
+    # Fill default for any individually missing component
+    h = hook if hook is not None else 50.0
+    r = retention if retention is not None else 50.0
+    p = payoff if payoff is not None else 50.0
+    c = curiosity if curiosity is not None else 50.0
+    e = emotion if emotion is not None else 40.0
+    s = surprise if surprise is not None else 40.0
+    rel = relatability if relatability is not None else 50.0
+    conf = conflict if conflict is not None else 30.0
+    sh = shareability if shareability is not None else 40.0
+
+    base_score = (
+        0.20 * h +
+        0.20 * r +
+        0.15 * p +
+        0.15 * c +
+        0.10 * e +
+        0.05 * s +
+        0.05 * rel +
+        0.05 * conf +
+        0.05 * sh
+    )
+
+    standalone = _val("standalone_score", default=75.0)
+    clipability = _val("clipability_score", default=75.0)
+    context_dep = _val("context_dependency", default=20.0)
+
+    quality_factor = (
+        0.50 +
+        0.30 * (standalone / 100.0) +
+        0.20 * (clipability / 100.0) -
+        0.30 * (context_dep / 100.0)
+    )
+    quality_factor = max(0.25, min(1.05, quality_factor))
+
+    final_score = int(round(max(0.0, min(100.0, base_score * quality_factor))))
+    return final_score
+
+
+def trim_to_best(shorts, max_clips, overlap_threshold=0.35):
+    """Cut an over-long detail-pass result down to ``max_clips`` BY SCORE and DIVERSITY.
+
+    Applies:
+      1. Multi-signal ranking key (predicted_score, payoff_score, retention_score, standalone_score)
+      2. Overlap suppression: if two clips overlap significantly in time (> overlap_threshold),
+         suppresses the lower-ranked duplicate.
+      3. Topic / content diversity: ensures candidates do not all come from the same repetitive pattern.
+      4. Transcript order preservation: returns survivors sorted by chronological start time.
     """
     max_clips = max(1, int(max_clips or 1))
-    if len(shorts) <= max_clips:
-        return list(shorts)
+    if not shorts:
+        return []
 
-    def score(item):
+    # Helper for clip score calculation and ranking
+    def _rank_key(item):
+        idx, c = item
         try:
-            return float(item[1].get("predicted_score") or 0)
+            score = float(c.get("predicted_score") if c.get("predicted_score") is not None else 0.0)
         except (TypeError, ValueError, AttributeError):
-            return 0.0
+            score = 0.0
+        payoff = float(c.get("payoff_score") or 0.0)
+        retention = float(c.get("retention_score") or 0.0)
+        standalone = float(c.get("standalone_score") or 0.0)
+        # Negative idx keeps ties in transcript order
+        return (score, payoff, retention, standalone, -idx)
 
+    def _overlap(c1, c2):
+        s1, e1 = float(c1.get("start", 0)), float(c1.get("end", 0))
+        s2, e2 = float(c2.get("start", 0)), float(c2.get("end", 0))
+        dur1 = max(0.1, e1 - s1)
+        dur2 = max(0.1, e2 - s2)
+        inter = max(0.0, min(e1, e2) - max(s1, s2))
+        return inter / min(dur1, dur2)
+
+    # Sort all candidates by rank key descending
     indexed = list(enumerate(shorts))
-    best = sorted(indexed, key=score, reverse=True)[:max_clips]
-    return [item for _, item in sorted(best, key=lambda pair: pair[0])]
+    ranked = sorted(indexed, key=_rank_key, reverse=True)
+
+    # If the candidate count already fits and there are no severe overlaps, keep them
+    if len(shorts) <= max_clips:
+        has_severe_dupe = False
+        for i in range(len(shorts)):
+            for j in range(i + 1, len(shorts)):
+                if _overlap(shorts[i], shorts[j]) > 0.70:
+                    has_severe_dupe = True
+                    break
+            if has_severe_dupe:
+                break
+        if not has_severe_dupe:
+            return list(shorts)
+
+    # Greedy selection with overlap suppression and diversity preference
+    selected = []
+    content_type_counts = {}
+
+    for idx, cand in ranked:
+        if len(selected) >= max_clips:
+            break
+
+        # Check overlap against already selected clips
+        is_overlapping = False
+        for sel in selected:
+            ov = _overlap(cand, sel)
+            if ov > overlap_threshold:
+                # If they overlap, check if candidate has distinct story/payoff
+                # If overlap is very high (> 0.50), always suppress
+                if ov > 0.50 or cand.get("content_type") == sel.get("content_type"):
+                    is_overlapping = True
+                    break
+
+        if is_overlapping:
+            continue
+
+        # Check excessive content type repetition (diversity)
+        ctype = cand.get("content_type") or "general"
+        if content_type_counts.get(ctype, 0) >= 2 and len(ranked) > max_clips:
+            continue
+
+        selected.append(cand)
+        content_type_counts[ctype] = content_type_counts.get(ctype, 0) + 1
+
+    # If overlap suppression was too strict and we need more clips to reach max_clips,
+    # fill from remaining ranked candidates
+    if len(selected) < max_clips:
+        for idx, cand in ranked:
+            if cand not in selected:
+                if not any(_overlap(cand, sel) > 0.75 for sel in selected):
+                    selected.append(cand)
+                    if len(selected) >= max_clips:
+                        break
+
+    # If still below 1 (e.g. max_clips >= 1 but empty), ensure at least highest ranked is in
+    if not selected and ranked:
+        selected.append(ranked[0][1])
+
+    # Re-sort by original chronological start time
+    return sorted(selected, key=lambda c: float(c.get("start", 0)))
 
 
 def clip_duration_bounds():

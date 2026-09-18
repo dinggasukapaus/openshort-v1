@@ -56,6 +56,8 @@ export default function ResultCard({ clip, index, jobId, durable, uploadPostKey,
     const [showBrollModal, setShowBrollModal] = useState(false);
     const [showEffectsModal, setShowEffectsModal] = useState(false);
     const [showWatermarkModal, setShowWatermarkModal] = useState(false);
+    const [showScoreModal, setShowScoreModal] = useState(false);
+    const [copiedHook, setCopiedHook] = useState(false);
     const [selectedNiche, setSelectedNiche] = useState('general');
     const { plan } = useAuth();
     const videoRef = React.useRef(null);
@@ -947,12 +949,14 @@ export default function ResultCard({ clip, index, jobId, durable, uploadPostKey,
                         position, anything — it has to name itself and carry
                         its scale, or it is decoration. */}
                     {Number.isFinite(clip.predicted_score) && (
-                        <span
-                            className="bg-black/70 font-mono text-micro uppercase px-2 py-1 rounded-full flex items-center gap-1"
-                            title="openshorts' prediction of how well this clip will perform, from 0 to 100"
+                        <button
+                            type="button"
+                            onClick={() => setShowScoreModal(true)}
+                            className="bg-black/75 hover:bg-black font-mono text-micro uppercase px-2 py-1 rounded-full flex items-center gap-1.5 transition-colors cursor-pointer border border-white/10 hover:border-brass/40 shadow-xs"
+                            title="Klik untuk melihat Viral Potential Breakdown (Hook, Retensi, Payoff, dsb.)"
                         >
-                            <TrendingUp size={11} className="shrink-0 text-muted" />
-                            <span className="text-muted">viral</span>
+                            <TrendingUp size={11} className="shrink-0 text-brass" />
+                            <span className="text-muted">viral potential:</span>
                             <b className={
                                 clip.predicted_score >= 80 ? 'text-ok'
                                     : clip.predicted_score >= 65 ? 'text-brass'
@@ -961,7 +965,7 @@ export default function ResultCard({ clip, index, jobId, durable, uploadPostKey,
                                 {clip.predicted_score}
                             </b>
                             <span className="text-muted">/100</span>
-                        </span>
+                        </button>
                     )}
                     {/* Workflow Status Pill */}
                     <button
@@ -1102,6 +1106,17 @@ export default function ResultCard({ clip, index, jobId, durable, uploadPostKey,
                         </span>
                         {durationReadout && <span className="readout bg-paper3 px-2 py-0.5 rounded-full shrink-0">{durationReadout}</span>}
                         {resolution && <span className="readout bg-paper3 px-2 py-0.5 rounded-full shrink-0">{resolution}</span>}
+                        {Number.isFinite(clip.predicted_score) && (
+                            <button
+                                type="button"
+                                onClick={() => setShowScoreModal(true)}
+                                className="readout bg-paper3 hover:bg-paper2 text-brass hover:text-ink px-2 py-0.5 rounded-full shrink-0 flex items-center gap-1 border border-rule transition-colors cursor-pointer"
+                                title="Lihat rincian skor & sinyal viralitas"
+                            >
+                                <TrendingUp size={11} />
+                                <span>Score Breakdown</span>
+                            </button>
+                        )}
                     </div>
                 </div>
 
@@ -1316,6 +1331,190 @@ export default function ResultCard({ clip, index, jobId, durable, uploadPostKey,
                         <p className="text-sm text-ink2 select-all break-words bg-paper rounded-input p-3 border border-rule whitespace-pre-wrap">
                             {clip.video_description_for_tiktok || clip.video_description_for_instagram}
                         </p>
+                    </div>
+                </div>
+            </Modal>
+
+            {/* Viral Potential Breakdown Modal */}
+            <Modal
+                isOpen={showScoreModal}
+                onClose={() => setShowScoreModal(false)}
+                eyebrow="SHORT-FORM INTELLIGENCE V2"
+                title="viral potential breakdown"
+                size="lg"
+            >
+                <div className="space-y-5">
+                    {/* Overall Score Banner */}
+                    <div className="bg-paper rounded-input p-4 border border-rule flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div className="space-y-1">
+                            <span className="eyebrow text-brass">Viral Potential Ranking</span>
+                            <div className="flex items-baseline gap-2">
+                                <span className={`text-4xl font-bold font-mono ${
+                                    (clip.predicted_score ?? 0) >= 80 ? 'text-ok' :
+                                    (clip.predicted_score ?? 0) >= 65 ? 'text-brass' : 'text-ink'
+                                }`}>
+                                    {clip.predicted_score ?? 0}
+                                </span>
+                                <span className="text-muted font-mono text-sm">/ 100</span>
+                                <span className={`text-xs px-2 py-0.5 rounded-full font-mono uppercase ml-2 ${
+                                    (clip.predicted_score ?? 0) >= 80 ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' :
+                                    (clip.predicted_score ?? 0) >= 65 ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' :
+                                    'bg-paper3 text-muted border border-rule'
+                                }`}>
+                                    {(clip.predicted_score ?? 0) >= 80 ? 'High Potential' :
+                                     (clip.predicted_score ?? 0) >= 65 ? 'Promising' : 'Moderate'}
+                                </span>
+                            </div>
+                            <p className="text-xs text-muted max-w-md">
+                                Skor mengindikasikan kelengkapan struktur (Hook → Retensi → Payoff) dan kemandirian cerita tanpa bergantung konteks luar video.
+                            </p>
+                        </div>
+
+                        {/* Badges / Tags */}
+                        <div className="flex flex-wrap sm:flex-col gap-1.5 shrink-0 text-right">
+                            {clip.hook_type && (
+                                <div className="text-xs font-mono bg-paper2 px-2.5 py-1 rounded border border-rule flex items-center gap-1.5 justify-between">
+                                    <span className="text-muted text-[10px] uppercase">Hook:</span>
+                                    <span className="text-brass font-medium">{String(clip.hook_type).replace(/_/g, ' ')}</span>
+                                </div>
+                            )}
+                            {clip.payoff_type && (
+                                <div className="text-xs font-mono bg-paper2 px-2.5 py-1 rounded border border-rule flex items-center gap-1.5 justify-between">
+                                    <span className="text-muted text-[10px] uppercase">Payoff:</span>
+                                    <span className="text-ok font-medium">{String(clip.payoff_type).replace(/_/g, ' ')}</span>
+                                </div>
+                            )}
+                            {clip.dominant_emotion && (
+                                <div className="text-xs font-mono bg-paper2 px-2.5 py-1 rounded border border-rule flex items-center gap-1.5 justify-between">
+                                    <span className="text-muted text-[10px] uppercase">Emotion:</span>
+                                    <span className="text-ink font-medium">{String(clip.dominant_emotion).replace(/_/g, ' ')}</span>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Editorial Hook Reframing Suggestion (if available) */}
+                    {(clip.editorial_hook_suggestion || clip.hook_rewrite_potential) && (
+                        <div className="bg-amber-500/10 border border-amber-500/30 rounded-input p-3.5 space-y-2">
+                            <div className="flex items-center justify-between gap-2">
+                                <div className="flex items-center gap-1.5 text-xs font-medium text-amber-400">
+                                    <Sparkles size={14} className="text-brass shrink-0" />
+                                    <span>Editorial Hook Suggestion (Reframing Visual / Judul)</span>
+                                </div>
+                                {clip.editorial_hook_suggestion && (
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            navigator.clipboard.writeText(clip.editorial_hook_suggestion);
+                                            setCopiedHook(true);
+                                            setTimeout(() => setCopiedHook(false), 2000);
+                                        }}
+                                        className="text-[11px] font-mono flex items-center gap-1 px-2 py-0.5 rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 transition-colors cursor-pointer"
+                                    >
+                                        {copiedHook ? <Check size={12} className="text-ok" /> : <Copy size={12} />}
+                                        <span>{copiedHook ? 'Copied' : 'Copy'}</span>
+                                    </button>
+                                )}
+                            </div>
+                            {clip.editorial_hook_suggestion && (
+                                <p className="text-sm text-ink font-medium bg-black/40 px-3 py-2 rounded border border-amber-500/20 italic">
+                                    "{clip.editorial_hook_suggestion}"
+                                </p>
+                            )}
+                            <p className="text-[11px] text-muted">
+                                Rekomendasi kalimat pembuka teks overlay atau judul untuk memancing rasa ingin tahu penonton sejak detik pertama.
+                            </p>
+                        </div>
+                    )}
+
+                    {/* Retention Risk Alert if High */}
+                    {clip.retention_risk === 'high' && (
+                        <div className="bg-red-500/10 border border-red-500/30 rounded-input p-3 flex items-start gap-2.5 text-xs text-red-400">
+                            <AlertCircle size={15} className="mt-0.5 shrink-0" />
+                            <div>
+                                <span className="font-semibold uppercase tracking-wider block font-mono text-[10px]">Perhatian Retensi Penonton</span>
+                                <p className="text-red-300 mt-0.5">
+                                    {clip.retention_drop_reason || "Ada risiko penurunan retensi di tengah klip. Pastikan pacing visual atau B-roll menjaga perhatian penonton."}
+                                </p>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* 9 Core Signals Breakdown */}
+                    <div>
+                        <h4 className="eyebrow mb-3 flex items-center justify-between">
+                            <span>Sinyal Evaluasi Utama (Bobot %)</span>
+                            <span className="text-[10px] text-muted font-normal lowercase">skala 0 - 100</span>
+                        </h4>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            {[
+                                { label: 'Hook (Scroll Stop)', val: clip.hook_score, weight: '20%', desc: 'Daya henti scroll di 1-3 detik pertama' },
+                                { label: 'Viewer Retention', val: clip.retention_score, weight: '20%', desc: 'Konsistensi atensi penonton sepanjang klip' },
+                                { label: 'Story Payoff', val: clip.payoff_score, weight: '15%', desc: 'Kepuasan resolusi / jawaban di akhir' },
+                                { label: 'Curiosity Gap', val: clip.curiosity_score, weight: '15%', desc: 'Rasa penasaran untuk menonton sampai tuntas' },
+                                { label: 'Emotional Pull', val: clip.emotion_score, weight: '10%', desc: 'Resonansi emosi (humor, kaget, inspirasi)' },
+                                { label: 'Surprise Factor', val: clip.surprise_score, weight: '5%', desc: 'Fakta atau momen tak terduga / counter-intuitive' },
+                                { label: 'Relatability', val: clip.relatability_score, weight: '5%', desc: 'Keterhubungan dengan kehidupan audiens' },
+                                { label: 'Conflict / Tension', val: clip.conflict_score, weight: '5%', desc: 'Adanya perdebatan, risiko, atau tensi narasi' },
+                                { label: 'Shareability', val: clip.shareability_score, weight: '5%', desc: 'Potensi dibagikan ke teman / medsos' },
+                            ].map((sig, i) => (
+                                <div key={i} className="bg-paper rounded-input p-2.5 border border-rule space-y-1.5">
+                                    <div className="flex items-center justify-between text-xs">
+                                        <div className="flex items-center gap-1.5 font-medium text-ink">
+                                            <span>{sig.label}</span>
+                                            <span className="text-[10px] text-muted font-mono">({sig.weight})</span>
+                                        </div>
+                                        <span className="font-mono font-semibold text-ink2">
+                                            {sig.val !== undefined && sig.val !== null ? sig.val : '-'}
+                                        </span>
+                                    </div>
+                                    <div className="w-full bg-paper3 h-1.5 rounded-full overflow-hidden">
+                                        <div
+                                            className={`h-full rounded-full transition-all duration-500 ${
+                                                (sig.val ?? 0) >= 80 ? 'bg-emerald-500' :
+                                                (sig.val ?? 0) >= 60 ? 'bg-amber-500' : 'bg-rule2'
+                                            }`}
+                                            style={{ width: `${Math.max(0, Math.min(100, sig.val ?? 50))}%` }}
+                                        />
+                                    </div>
+                                    <p className="text-[10px] text-muted truncate">{sig.desc}</p>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Quality & Standalone Multipliers */}
+                    <div className="pt-2 border-t border-rule">
+                        <h4 className="eyebrow mb-2">Faktor Kualitas & Kemandirian Klip</h4>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+                            <div className="bg-paper p-2.5 rounded-input border border-rule">
+                                <div className="flex justify-between font-mono">
+                                    <span className="text-muted">Standalone Clarity:</span>
+                                    <span className="font-semibold text-ink">{clip.standalone_score ?? '-'}</span>
+                                </div>
+                                <p className="text-[10px] text-muted mt-1">Dapat dipahami tanpa nonton video utuh</p>
+                            </div>
+                            <div className="bg-paper p-2.5 rounded-input border border-rule">
+                                <div className="flex justify-between font-mono">
+                                    <span className="text-muted">Clipability:</span>
+                                    <span className="font-semibold text-ink">{clip.clipability_score ?? '-'}</span>
+                                </div>
+                                <p className="text-[10px] text-muted mt-1">Kelancaran ritme & kejelasan dialog</p>
+                            </div>
+                            <div className="bg-paper p-2.5 rounded-input border border-rule">
+                                <div className="flex justify-between font-mono">
+                                    <span className="text-muted">Context Dependency:</span>
+                                    <span className={`font-semibold ${
+                                        (clip.context_dependency ?? 0) > 40 ? 'text-danger' : 'text-ink'
+                                    }`}>
+                                        {clip.context_dependency !== undefined ? `${clip.context_dependency}%` : '-'}
+                                    </span>
+                                </div>
+                                <p className="text-[10px] text-muted mt-1">
+                                    {(clip.context_dependency ?? 0) > 40 ? '⚠️ Butuh konteks video panjang' : '✓ Mandiri (tidak ambigu)'}
+                                </p>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </Modal>
