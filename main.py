@@ -685,7 +685,7 @@ def sanitize_filename(filename):
     # every clip with a Spanish title. Normalising here fixes the whole chain at
     # its source, and is a no-op for the ASCII names that already worked.
     filename = unicodedata.normalize('NFC', filename)
-    filename = re.sub(r'[<>:"/\\|?*#]', '', filename)
+    filename = re.sub(r'[<>:"/\\|?*#%]', '', filename)
     filename = filename.replace(' ', '_')
     return truncate_bytes(filename, MAX_TITLE_BYTES)
 
@@ -1954,7 +1954,7 @@ if __name__ == '__main__':
         input_video, video_title = download_youtube_video(args.url, output_dir)
     else:
         input_video = args.input
-        video_title = os.path.splitext(os.path.basename(input_video))[0]
+        video_title = sanitize_filename(os.path.splitext(os.path.basename(input_video))[0])
         
         if args.output and not args.skip_analysis:
             # For multi-clip runs, treat --output as an OUTPUT DIRECTORY (create it if needed).

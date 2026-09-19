@@ -19,6 +19,8 @@ import functools
 import asyncio
 import signal
 import socket
+import urllib.parse
+import unicodedata
 from datetime import datetime, timezone, timedelta
 from dotenv import load_dotenv
 from typing import Any, Dict, Optional, List
@@ -1679,8 +1681,49 @@ app.add_middleware(
     expose_headers=["Content-Length", "Content-Range", "Accept-Ranges"],
 )
 
+
+def sanitize_filename(filename: str) -> str:
+    """Sanitize filename to prevent illegal filesystem characters and URL fragment/query issues."""
+    filename = unicodedata.normalize('NFC', filename)
+    filename = re.sub(r'[<>:"/\\|?*#%]', '', filename)
+    filename = filename.replace(' ', '_')
+    return filename
+
+
+class VideoStaticFiles(StaticFiles):
+    """StaticFiles mount with fallback resolution for URL-truncated filenames.
+
+    If a client or browser requests a video without encoding '#' (e.g. video files with
+    hashtags like '#felixsiauw' in their title), the browser truncates everything from
+    '#' onwards as a client-side URL fragment. This fallback detects the truncation and
+    resolves the matching file on disk instead of returning a 404.
+    """
+    def lookup_path(self, path: str):
+        full_path, stat_result = super().lookup_path(path)
+        if stat_result is not None:
+            return full_path, stat_result
+
+        try:
+            norm = path.replace("\\", "/").strip("/")
+            parts = norm.split("/", 1)
+            if len(parts) == 2:
+                job_id, stem = parts
+                job_dir = os.path.join(self.directory, job_id)
+                if os.path.isdir(job_dir):
+                    prefix = stem.strip()
+                    for fname in os.listdir(job_dir):
+                        if fname.startswith(prefix) and fname.lower().endswith(('.mp4', '.webm', '.mov', '.png', '.jpg', '.jpeg')):
+                            candidate = os.path.join(job_dir, fname)
+                            if os.path.isfile(candidate):
+                                return candidate, os.stat(candidate)
+        except Exception:
+            pass
+
+        return "", None
+
+
 # Mount static files for serving videos
-app.mount("/videos", StaticFiles(directory=OUTPUT_DIR), name="videos")
+app.mount("/videos", VideoStaticFiles(directory=OUTPUT_DIR), name="videos")
 
 # Mount static files for serving thumbnails
 THUMBNAILS_DIR = os.path.join(OUTPUT_DIR, "thumbnails")
@@ -2039,7 +2082,7 @@ async def create_upload(request: Request):
         body = await request.json()
     except Exception:
         body = {}
-    filename = os.path.basename(str((body or {}).get("filename") or "video.mp4")) or "video.mp4"
+    filename = sanitize_filename(os.path.basename(str((body or {}).get("filename") or "video.mp4")) or "video.mp4")
     upload_id = str(uuid.uuid4())
     pending_uploads[upload_id] = {
         "user_id": user_id,
@@ -2434,7 +2477,7 @@ async def process_endpoint(
         # Save uploaded file with size limit check.
         # basename() strips any path components from the client-supplied
         # filename so a name like "../../main.py" can't escape UPLOAD_DIR.
-        safe_name = os.path.basename(file.filename or "upload") or "upload"
+        safe_name = sanitize_filename(os.path.basename(file.filename or "upload") or "upload")
         input_path = os.path.join(UPLOAD_DIR, f"{job_id}_{safe_name}")
 
         # Read file in chunks to check size
@@ -2991,7 +3034,7 @@ async def edit_clip(
         # Resolve Input Path: Prefer explict input_filename from frontend (chaining edits)
         if req.input_filename:
             # Security: Ensure just a filename, no paths
-            safe_name = os.path.basename(req.input_filename)
+            safe_name = os.path.basename(urllib.parse.unquote(req.input_filename))
             input_path = os.path.join(OUTPUT_DIR, req.job_id, safe_name)
             filename = safe_name
         else:
@@ -3951,7 +3994,7 @@ async def generate_effects_config(
     try:
         # Resolve input path
         if req.input_filename:
-            safe_name = os.path.basename(req.input_filename)
+            safe_name = os.path.basename(urllib.parse.unquote(req.input_filename))
             input_path = os.path.join(OUTPUT_DIR, req.job_id, safe_name)
         else:
             clip = job['result']['clips'][req.clip_index]
@@ -4196,7 +4239,7 @@ async def auto_detect_effects(req: EffectsAutoDetectRequest, request: Request):
     clip_data = clips[req.clip_index]
 
     if req.input_filename:
-        filename = os.path.basename(req.input_filename)
+        filename = os.path.basename(urllib.parse.unquote(req.input_filename))
     else:
         filename = clip_data.get('video_url', '').split('/')[-1]
     input_path = os.path.join(output_dir, filename)
@@ -4306,7 +4349,7 @@ async def apply_effects_endpoint(req: EffectsApplyRequest, request: Request):
     clip_data = clips[req.clip_index]
 
     if req.input_filename:
-        filename = os.path.basename(req.input_filename)
+        filename = os.path.basename(urllib.parse.unquote(req.input_filename))
     else:
         filename = clip_data.get('video_url', '').split('/')[-1]
         if not filename:
@@ -4532,7 +4575,7 @@ async def add_subtitles(req: SubtitleRequest, request: Request):
     # Video Path
     if req.input_filename:
         # Use chained file
-        filename = os.path.basename(req.input_filename)
+        filename = os.path.basename(urllib.parse.unquote(req.input_filename))
     else:
         # Fallback to standard naming
         filename = clip_data.get('video_url', '').split('/')[-1]
@@ -4693,8 +4736,9 @@ async def remove_subtitles(req: RemoveSubtitlesRequest, request: Request):
     if req.clip_index >= len(clips):
         raise HTTPException(status_code=404, detail="Clip not found")
 
+    raw_input_name = urllib.parse.unquote(req.input_filename) if req.input_filename else None
     filename = os.path.basename(
-        req.input_filename
+        raw_input_name
         or (clips[req.clip_index].get('video_url') or '').split('/')[-1]
         or f"{os.path.basename(json_files[0]).replace('_metadata.json', '')}"
            f"_clip_{req.clip_index + 1}.mp4")
@@ -4762,7 +4806,7 @@ async def add_hook(req: HookRequest, request: Request):
     
     # Video Path
     if req.input_filename:
-        filename = os.path.basename(req.input_filename)
+        filename = os.path.basename(urllib.parse.unquote(req.input_filename))
     else:
         filename = clip_data.get('video_url', '').split('/')[-1]
         if not filename:
@@ -4906,7 +4950,7 @@ async def add_thumbnail_intro(req: ThumbnailIntroRequest, request: Request):
     clip_data = clips[req.clip_index]
 
     if req.input_filename:
-        filename = os.path.basename(req.input_filename)
+        filename = os.path.basename(urllib.parse.unquote(req.input_filename))
     else:
         filename = clip_data.get('video_url', '').split('/')[-1]
         if not filename:
@@ -5480,7 +5524,7 @@ async def apply_broll_to_clip(req: BrollApplyRequest, request: Request):
     base_name = os.path.basename(json_files[0]).replace('_metadata.json', '')
     candidates = []
     if req.input_filename:
-        candidates.append(os.path.basename(req.input_filename.split('?')[0]))
+        candidates.append(os.path.basename(urllib.parse.unquote(req.input_filename.split('?')[0])))
     if clip_data.get('video_url'):
         candidates.append(os.path.basename(clip_data['video_url'].split('?')[0]))
 
@@ -5751,7 +5795,7 @@ async def translate_clip(
 
     # Video Path
     if req.input_filename:
-        filename = os.path.basename(req.input_filename)
+        filename = os.path.basename(urllib.parse.unquote(req.input_filename))
     else:
         filename = clip_data.get('video_url', '').split('/')[-1]
         if not filename:
@@ -6215,7 +6259,7 @@ async def thumbnail_upload(
     # escaping UPLOAD_DIR; the chunked read caps memory so a huge body can't OOM.
     video_path = None
     if file:
-        safe_name = os.path.basename(file.filename or "upload") or "upload"
+        safe_name = sanitize_filename(os.path.basename(file.filename or "upload") or "upload")
         video_path = os.path.join(UPLOAD_DIR, f"thumb_{session_id}_{safe_name}")
         size = 0
         limit_bytes = MAX_FILE_SIZE_MB * 1024 * 1024
@@ -6334,7 +6378,7 @@ async def thumbnail_analyze(
             from main import download_youtube_video
             video_path, _ = download_youtube_video(url, UPLOAD_DIR)
         else:
-            safe_name = os.path.basename(file.filename or "upload") or "upload"
+            safe_name = sanitize_filename(os.path.basename(file.filename or "upload") or "upload")
             video_path = os.path.join(UPLOAD_DIR, f"thumb_{session_id}_{safe_name}")
             size = 0
             limit_bytes = MAX_FILE_SIZE_MB * 1024 * 1024
