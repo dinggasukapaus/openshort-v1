@@ -11,5 +11,5 @@ if exist "%~dp0venv311\Scripts\activate.bat" (
     echo [OK] Menggunakan Virtual Environment (venv)
     call "%~dp0venv\Scripts\activate.bat"
 )
-python -m uvicorn app:app --host 127.0.0.1 --port 8000 --reload --reload-exclude "output/*" --reload-exclude "uploads/*" --reload-exclude "dashboard/*"
+python -m uvicorn app:app --host 127.0.0.1 --port 8000 --reload
 pause
